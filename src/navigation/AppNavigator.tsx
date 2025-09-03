@@ -1,0 +1,95 @@
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+
+// Screens
+import WelcomeScreen from "../screens/WelcomeScreen";
+import LoginScreen from "../screens/LoginScreen";
+import GenrePreferencesScreen from "../screens/GenrePreferencesScreen";
+import HomeScreen from "../screens/HomeScreen";
+import VibeModeScreen from "../screens/VibeModeScreen";
+import PlaylistsScreen from "../screens/PlaylistsScreen";
+import SearchScreen from "../screens/SearchScreen";
+import ProfileScreen from "../screens/ProfileScreen";
+
+export type RootStackParamList = {
+  Welcome: undefined;
+  Login: undefined;
+  GenrePreferences: undefined;
+  MainTabs: undefined;
+  VibeMode: undefined;
+};
+
+export type MainTabParamList = {
+  Home: undefined;
+  Search: undefined;
+  Playlists: undefined;
+  Profile: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          if (route.name === "Home") {
+            iconName = focused ? "home" : "home-outline";
+          } else if (route.name === "Search") {
+            iconName = focused ? "search" : "search-outline";
+          } else if (route.name === "Playlists") {
+            iconName = focused ? "musical-notes" : "musical-notes-outline";
+          } else if (route.name === "Profile") {
+            iconName = focused ? "person" : "person-outline";
+          } else {
+            iconName = "home-outline";
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: "#1DB954",
+        tabBarInactiveTintColor: "#FFFFFF",
+        tabBarStyle: {
+          backgroundColor: "#000000",
+          borderTopColor: "#333333",
+          borderTopWidth: 1,
+        },
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Search" component={SearchScreen} />
+      <Tab.Screen name="Playlists" component={PlaylistsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#000000" },
+      }}
+    >
+      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="GenrePreferences" component={GenrePreferencesScreen} />
+      <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen 
+        name="VibeMode" 
+        component={VibeModeScreen}
+        options={{
+          presentation: "modal",
+          gestureEnabled: true,
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
