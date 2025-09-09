@@ -1,240 +1,176 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, Alert } from "react-native";
+// src/screens/VibeModeScreen.tsx
+import React, { useState, useEffect } from "react";
+import { View, Text, Image, Dimensions, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { LinearGradient } from "expo-linear-gradient";
-import { VibeMode } from "../types/music";
+import { Audio } from "expo-av";
+import { PanGestureHandler, PanGestureHandlerGestureEvent } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedGestureHandler,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from "react-native-reanimated";
+import { useRoute } from "@react-navigation/native";
 import { useMusicStore } from "../state/musicStore";
+import { VibeMode, SpotifyTrack } from "../types/music";
 import { spotifyService } from "../services/spotifyService";
 
-const VIBE_MODES: VibeMode[] = [
-  {
-    id: "gym",
-    name: "Gym Mode",
-    emoji: "🏋️",
-    description: "High-energy, high BPM tracks",
-    audioFeatures: {
-      energy: [0.7, 1.0],
-      tempo: [120, 180],
-      danceability: [0.6, 1.0],
-    },
-    gradient: ["#1DB954", "#1ed760"],
-  },
-  {
-    id: "chill",
-    name: "Chill Mode",
-    emoji: "🌙",
-    description: "Lo-fi, slow BPM, relaxing",
-    audioFeatures: {
-      energy: [0.0, 0.5],
-      valence: [0.3, 0.7],
-      tempo: [60, 120],
-    },
-    gradient: ["#4A90E2", "#7BB3F0"],
-  },
-  {
-    id: "breakup",
-    name: "Breakup Mode",
-    emoji: "💔",
-    description: "Sad, emotional tracks",
-    audioFeatures: {
-      valence: [0.0, 0.4],
-      energy: [0.2, 0.6],
-    },
-    gradient: ["#8E44AD", "#A569BD"],
-  },
-  {
-    id: "study",
-    name: "Study Mode",
-    emoji: "📚",
-    description: "Instrumental, lo-fi focus music",
-    audioFeatures: {
-      instrumentalness: [0.5, 1.0],
-      energy: [0.2, 0.6],
-      valence: [0.4, 0.8],
-    },
-    gradient: ["#F39C12", "#F7DC6F"],
-  },
-  {
-    id: "party",
-    name: "Party Mode",
-    emoji: "🎉",
-    description: "EDM, dance, rap",
-    audioFeatures: {
-      energy: [0.8, 1.0],
-      danceability: [0.7, 1.0],
-      valence: [0.6, 1.0],
-    },
-    gradient: ["#E74C3C", "#F1948A"],
-  },
-];
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 export default function VibeModeScreen() {
-  const navigation = useNavigation();
-  const [customVibe, setCustomVibe] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const { setVibeMode, setFeedTracks } = useMusicStore();
+  const route = useRoute();
+  const vibeMode = (route.params as { vibeMode: VibeMode })?.vibeMode;
+  const { setFeedTracks } = useMusicStore();
 
-  const handleModeSelect = async (modeId: string) => {
-    const selectedMode = VIBE_MODES.find(mode => mode.id === modeId);
-    if (!selectedMode) return;
+  const [feedTracks, setLocalTracks] = useState<SpotifyTrack[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-    setIsLoading(true);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const rotation = useSharedValue(0);
+
+  // Fetch tracks for the given vibeMode
+  useEffect(() => {
+    (async () => {
+      try {
+        const userTopTracks = await spotifyService.getUserTopTracks();
+        const tracks = await spotifyService.getRecommendationsForVibeMode(vibeMode, userTopTracks);
+        setLocalTracks(tracks);
+        setFeedTracks(tracks);
+      } catch (err) {
+        console.error("Failed to load vibe tracks:", err);
+      }
+    })();
+  }, [vibeMode]);
+
+  // Play the current track
+  useEffect(() => {
+    playCurrentTrack();
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
+  }, [currentIndex, feedTracks]);
+
+  const playCurrentTrack = async () => {
+    const track = feedTracks[currentIndex];
+    if (!track?.preview_url) return;
     try {
-      // Set the vibe mode in store
-      setVibeMode(selectedMode);
-      
-      // Load recommendations for this vibe mode
-      const userTopTracks = await spotifyService.getUserTopTracks();
-      const tracks = await spotifyService.getRecommendationsForVibeMode(selectedMode, userTopTracks);
-      
-      // Filter tracks with preview URLs
-      const tracksWithPreviews = tracks.filter(track => track.preview_url);
-      setFeedTracks(tracksWithPreviews);
-      
-      navigation.goBack();
-    } catch (error) {
-      console.error("Error loading vibe mode:", error);
-      Alert.alert("Error", "Unable to load tracks for this vibe. Please try again.");
-    } finally {
-      setIsLoading(false);
+      if (sound) await sound.unloadAsync();
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: track.preview_url },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      await newSound.playAsync();
+    } catch (err) {
+      console.error("Error playing preview:", err);
     }
   };
 
-  const handleCustomVibe = async () => {
-    if (!customVibe.trim()) return;
+  const swipeHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
+    onStart: (_, ctx: any) => {
+      ctx.startX = translateX.value;
+      ctx.startY = translateY.value;
+    },
+    onActive: (event, ctx) => {
+      translateX.value = ctx.startX + event.translationX;
+      translateY.value = ctx.startY + event.translationY;
+      rotation.value = (translateX.value / SCREEN_WIDTH) * 20;
+    },
+    onEnd: () => {
+      if (translateX.value > SWIPE_THRESHOLD) {
+        runOnJS(handleSwipe)("right");
+      } else if (translateX.value < -SWIPE_THRESHOLD) {
+        runOnJS(handleSwipe)("left");
+      } else {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        rotation.value = withSpring(0);
+      }
+    },
+  });
 
-    setIsLoading(true);
-    try {
-      // For now, use a general recommendation approach for custom vibes
-      // In a full implementation, you'd use AI to interpret the custom vibe
-      const tracks = await spotifyService.getRecommendations({
-        limit: 50,
-      });
-      
-      const tracksWithPreviews = tracks.filter(track => track.preview_url);
-      setFeedTracks(tracksWithPreviews);
-      
-      // Create a custom vibe mode
-      const customMode: VibeMode = {
-        id: "custom",
-        name: "Custom Vibe",
-        emoji: "✨",
-        description: customVibe,
-        audioFeatures: {},
-        gradient: ["#1DB954", "#1ed760"],
-      };
-      
-      setVibeMode(customMode);
-      navigation.goBack();
-    } catch (error) {
-      console.error("Error processing custom vibe:", error);
-      Alert.alert("Error", "Unable to process your custom vibe. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSwipe = (direction: "left" | "right") => {
+    translateX.value = withSpring(0);
+    translateY.value = withSpring(0);
+    rotation.value = withSpring(0);
+
+    setCurrentIndex(prev => {
+      if (prev + 1 >= feedTracks.length) return prev; // end of deck
+      return prev + 1;
+    });
   };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { rotate: `${rotation.value}deg` },
+    ],
+  }));
+
+  if (!feedTracks.length) {
+    return (
+      <SafeAreaView className="flex-1 justify-center items-center bg-black">
+        <Text className="text-white text-lg">Loading tracks...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const track = feedTracks[currentIndex];
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
       <StatusBar style="light" />
-      
-      <View className="flex-1 px-6">
-        <View className="items-center mt-8 mb-8">
-          <Text className="text-3xl font-bold text-white mb-2">
-            What are you vibin' today?
-          </Text>
-          <Text className="text-base text-gray-300 text-center">
-            Choose your mood to get personalized tracks
-          </Text>
-        </View>
-
-        <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-          <View className="space-y-4">
-            {VIBE_MODES.map((mode) => (
-              <Pressable
-                key={mode.id}
-                onPress={() => handleModeSelect(mode.id)}
-                disabled={isLoading}
-                className="overflow-hidden rounded-2xl"
-              >
-                <LinearGradient
-                  colors={mode.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="p-6"
-                >
-                  <View className="flex-row items-center">
-                    <Text className="text-4xl mr-4">{mode.emoji}</Text>
-                    <View className="flex-1">
-                      <Text className="text-xl font-bold text-black mb-1">
-                        {mode.name}
-                      </Text>
-                      <Text className="text-black opacity-80">
-                        {isLoading ? "Loading..." : mode.description}
-                      </Text>
-                    </View>
-                  </View>
-                </LinearGradient>
-              </Pressable>
-            ))}
-
-            {/* Custom Mode */}
-            <Pressable
-              onPress={() => setShowCustom(!showCustom)}
-              className="bg-gray-900 p-6 rounded-2xl border-2 border-gray-700"
-            >
-              <View className="flex-row items-center">
-                <Text className="text-4xl mr-4">✨</Text>
-                <View className="flex-1">
-                  <Text className="text-xl font-bold text-white mb-1">
-                    Custom Mode
-                  </Text>
-                  <Text className="text-gray-300">
-                    Describe your vibe in words
-                  </Text>
-                </View>
-              </View>
-            </Pressable>
-
-            {showCustom && (
-              <View className="bg-gray-900 p-6 rounded-2xl">
-                <TextInput
-                  value={customVibe}
-                  onChangeText={setCustomVibe}
-                  placeholder="Describe your vibe..."
-                  placeholderTextColor="#9CA3AF"
-                  className="text-white text-base mb-4 p-4 bg-gray-800 rounded-xl"
-                  multiline
-                />
-                <Pressable
-                  onPress={handleCustomVibe}
-                  disabled={!customVibe.trim() || isLoading}
-                  className={`px-6 py-3 rounded-xl ${
-                    customVibe.trim() && !isLoading ? "bg-green-500" : "bg-gray-700"
-                  }`}
-                >
-                  <Text className={`text-center font-semibold ${
-                    customVibe.trim() && !isLoading ? "text-black" : "text-gray-400"
-                  }`}>
-                    {isLoading ? "Loading..." : "Start Vibing"}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </ScrollView>
-
-        <Pressable
-          onPress={() => navigation.goBack()}
-          className="py-4 mt-4"
-        >
-          <Text className="text-gray-400 text-center text-base">Cancel</Text>
-        </Pressable>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <PanGestureHandler onGestureEvent={swipeHandler}>
+          <Animated.View style={[styles.card, animatedStyle]}>
+            <Image
+              source={{ uri: track.album.images[0]?.url }}
+              style={styles.albumArt}
+            />
+            <Text style={styles.title}>{track.name}</Text>
+            <Text style={styles.artist}>{track.artists.map(a => a.name).join(", ")}</Text>
+          </Animated.View>
+        </PanGestureHandler>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    width: SCREEN_WIDTH * 0.9,
+    height: SCREEN_WIDTH * 1.1,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#111",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  albumArt: {
+    width: "85%",
+    height: "60%",
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+  },
+  artist: {
+    fontSize: 16,
+    color: "#fff",
+    opacity: 0.8,
+    textAlign: "center",
+  },
+});

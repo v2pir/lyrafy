@@ -20,12 +20,14 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       const success = await authService.authenticateWithSpotify();
+      console.log("💾 Success:", success);
       if (success) {
         navigation.navigate("GenrePreferences");
       } else {
         Alert.alert("Authentication Failed", "Unable to connect to Spotify. Please try again.");
       }
     } catch (error) {
+      console.error("Spotify Login Error:", error);
       Alert.alert("Error", "An error occurred during authentication.");
     } finally {
       setIsLoading(false);

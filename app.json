@@ -1,17 +1,32 @@
 {
   "expo": {
-    "name": "vibecode",
-    "slug": "vibecode",
-    "scheme": "vibecode",
+    "name": "lyrafy",
+    "slug": "lyrafy",
+    "scheme": "lyrafy",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vanshchhabra.lyrafy"
     },
     "android": {
+      "package": "com.vanshchhabra.lyrafy",
       "edgeToEdgeEnabled": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "764b600c-5d4f-4b0e-883f-f15cbf873cd5"
+      }
+    },
+    "owner": "vc343",
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

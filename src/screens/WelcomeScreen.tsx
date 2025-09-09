@@ -16,7 +16,7 @@ export default function WelcomeScreen() {
       <StatusBar style="light" />
       <View className="flex-1 justify-center items-center px-8">
         <View className="items-center mb-16">
-          <Text className="text-6xl font-bold text-white mb-4">VibeSwipe</Text>
+          <Text className="text-6xl font-bold text-white mb-4">Lyrafy</Text>
           <Text className="text-lg text-gray-300 text-center">
             Swipe. Discover. Vibe.
           </Text>

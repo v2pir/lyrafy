@@ -62,23 +62,6 @@ export interface SpotifyPlaylist {
   public: boolean;
 }
 
-export interface SpotifyAudioFeatures {
-  id: string;
-  danceability: number;
-  energy: number;
-  key: number;
-  loudness: number;
-  mode: number;
-  speechiness: number;
-  acousticness: number;
-  instrumentalness: number;
-  liveness: number;
-  valence: number;
-  tempo: number;
-  duration_ms: number;
-  time_signature: number;
-}
-
 export interface SpotifyUser {
   id: string;
   display_name: string;
@@ -121,13 +104,6 @@ export interface VibeMode {
   name: string;
   emoji: string;
   description: string;
-  audioFeatures: {
-    energy?: [number, number];
-    valence?: [number, number];
-    danceability?: [number, number];
-    tempo?: [number, number];
-    instrumentalness?: [number, number];
-  };
   gradient: [string, string];
 }
 

@@ -45,7 +45,7 @@ export default function ProfileScreen() {
   };
 
   const handleHelp = () => {
-    Alert.alert("Help & Support", "For support, please contact us at support@vibeswipe.com");
+    Alert.alert("Help & Support", "For support, please contact us at support@lyrafy.com");
   };
 
   if (!user) {

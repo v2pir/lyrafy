@@ -122,8 +122,9 @@ export const useMusicStore = create<MusicState>()(
         userPreferences: state.userPreferences,
         likedTracks: state.likedTracks,
         userPlaylists: state.userPlaylists,
-        // Don't persist session data like feedTracks and currentTrackIndex
+        currentVibeMode: state.currentVibeMode, // ✅ add this
       }),
+
     }
   )
 );

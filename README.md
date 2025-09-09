@@ -1,4 +1,4 @@
-# VibeSwipe - Music Discovery App
+# Lyrafy - Music Discovery App
 
 **Tagline:** "Swipe. Discover. Vibe."
 

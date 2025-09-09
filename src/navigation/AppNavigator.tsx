@@ -12,13 +12,14 @@ import VibeModeScreen from "../screens/VibeModeScreen";
 import PlaylistsScreen from "../screens/PlaylistsScreen";
 import SearchScreen from "../screens/SearchScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import { VibeMode } from "../types/music";
 
 export type RootStackParamList = {
   Welcome: undefined;
   Login: undefined;
   GenrePreferences: undefined;
   MainTabs: undefined;
-  VibeMode: undefined;
+  VibeMode: { vibeMode: VibeMode };
 };
 
 export type MainTabParamList = {

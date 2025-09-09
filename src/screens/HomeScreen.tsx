@@ -10,58 +10,54 @@ import PagerView from "react-native-pager-view";
 import { useMusicStore } from "../state/musicStore";
 import { useAuthStore } from "../state/authStore";
 import { spotifyService } from "../services/spotifyService";
+import { authService } from "../services/authService";
 import MusicFeedCard from "../components/MusicFeedCard";
 import { SpotifyTrack } from "../types/music";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const pagerRef = useRef<PagerView>(null);
-  
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { 
-    feedTracks, 
-    currentVibeMode, 
-    setFeedTracks, 
-    likeTrack, 
-    userPreferences 
-  } = useMusicStore();
-  
+
+  const { feedTracks, currentVibeMode, setFeedTracks, likeTrack, userPreferences } = useMusicStore();
   const { isAuthenticated } = useAuthStore();
 
-  const handleVibeMode = () => {
-    navigation.navigate("VibeMode");
-  };
+  const handleVibeMode = () => navigation.navigate("VibeMode");
 
   const loadRecommendations = async () => {
-    if (!isAuthenticated) return;
-    
+    const token = await spotifyService.getAccessToken();
+    if (!token) {
+      console.warn("⚠️ No access token yet, forcing re-auth...");
+      const success = await authService.authenticateWithSpotify();
+      if (!success) return;
+    }
+
     setIsLoading(true);
     try {
       let tracks: SpotifyTrack[] = [];
-      
-      if (currentVibeMode) {
-        // Get recommendations based on vibe mode
-        const userTopTracks = await spotifyService.getUserTopTracks();
-        tracks = await spotifyService.getRecommendationsForVibeMode(currentVibeMode, userTopTracks);
+
+      if (currentVibeMode?.name) {
+        console.log("🎛️ Loading recommendations for vibe mode:", currentVibeMode.name);
+        tracks = await spotifyService.getRecommendationsForVibeMode(
+          currentVibeMode,
+          await spotifyService.getUserTopTracks()
+        );
+      } else if (userPreferences.favoriteGenres.length > 0) {
+        console.log("🎛️ Loading recommendations based on favorite genres:", userPreferences.favoriteGenres);
+        const query = userPreferences.favoriteGenres.join(" ");
+        tracks = await spotifyService.getRecommendations({ query, limit: 50 });
       } else {
-        // Get general recommendations based on user preferences
-        const seedGenres = userPreferences.favoriteGenres.slice(0, 5);
-        tracks = await spotifyService.getRecommendations({
-          seedGenres,
-          limit: 50,
-        });
+        console.log("⚠️ No vibe mode or genres — using top 50 tracks");
+        tracks = (await spotifyService.getUserTopTracks()).slice(0, 50);
       }
-      
-      // Filter out tracks without preview URLs
+
       const tracksWithPreviews = tracks.filter(track => track.preview_url);
       setFeedTracks(tracksWithPreviews);
-      
     } catch (error) {
       console.error("Error loading recommendations:", error);
       Alert.alert("Error", "Unable to load music recommendations. Please try again.");
@@ -71,34 +67,20 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && feedTracks.length === 0) {
-      loadRecommendations();
-    }
+    const init = async () => {
+      if (!isAuthenticated) return;
+      const token = await spotifyService.getAccessToken();
+      if (!token) return;
+      if (feedTracks.length === 0) await loadRecommendations();
+    };
+    init();
   }, [isAuthenticated, currentVibeMode]);
 
-  const handleLike = (track: SpotifyTrack) => {
-    likeTrack(track, currentVibeMode?.id);
-  };
-
-  const handleSkip = () => {
-    if (currentIndex < feedTracks.length - 1) {
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      pagerRef.current?.setPage(nextIndex);
-    } else {
-      // Load more tracks when reaching the end
-      loadRecommendations();
-    }
-  };
-
   const handleAddToPlaylist = (track: SpotifyTrack) => {
-    // TODO: Implement add to playlist modal
     Alert.alert("Add to Playlist", `"${track.name}" will be added to your playlist.`);
   };
 
-  const handlePageSelected = (e: any) => {
-    setCurrentIndex(e.nativeEvent.position);
-  };
+  const handlePageSelected = (e: any) => setCurrentIndex(e.nativeEvent.position);
 
   if (!isAuthenticated) {
     return (
@@ -110,54 +92,50 @@ export default function HomeScreen() {
             Connect your music service
           </Text>
           <Text className="text-base text-gray-400 text-center mb-8">
-            Sign in to start discovering personalized music
+            Sign in to Spotify to load your personalized tracks
           </Text>
           <Pressable
-            onPress={() => navigation.navigate("Login")}
+            onPress={async () => {
+              const success = await authService.authenticateWithSpotify();
+              if (success) await loadRecommendations();
+              else Alert.alert("Error", "Spotify login failed. Please try again.");
+            }}
             className="bg-green-500 px-8 py-4 rounded-2xl"
           >
-            <Text className="text-black text-lg font-semibold">Get Started</Text>
+            <Text className="text-black text-lg font-semibold">Connect Spotify</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (feedTracks.length === 0 && !isLoading) {
+  if ((feedTracks.length === 0 && !isLoading) || isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-black">
         <StatusBar style="light" />
         <View className="flex-1 justify-center items-center px-6">
-          <View className="items-center mb-8">
-            <Text className="text-xl text-gray-300 text-center mb-4">
-              Ready to discover new music?
-            </Text>
-            <Text className="text-base text-gray-400 text-center">
-              Choose your vibe and start swiping through personalized tracks
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={handleVibeMode}
-            className="bg-green-500 px-8 py-4 rounded-2xl flex-row items-center"
-          >
-            <Ionicons name="musical-notes" size={24} color="#000000" />
-            <Text className="text-black text-lg font-semibold ml-3">
-              Start Vibing
-            </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <SafeAreaView className="flex-1 bg-black">
-        <StatusBar style="light" />
-        <View className="flex-1 justify-center items-center">
-          <Ionicons name="musical-notes" size={48} color="#1DB954" />
-          <Text className="text-white text-lg mt-4">Loading your vibe...</Text>
+          {isLoading ? (
+            <>
+              <Ionicons name="musical-notes" size={48} color="#1DB954" />
+              <Text className="text-white text-lg mt-4">Loading your vibe...</Text>
+            </>
+          ) : (
+            <>
+              <Text className="text-xl text-gray-300 text-center mb-4">
+                Ready to discover new music?
+              </Text>
+              <Text className="text-base text-gray-400 text-center mb-8">
+                Choose your vibe and start swiping through personalized tracks
+              </Text>
+              <Pressable
+                onPress={handleVibeMode}
+                className="bg-green-500 px-8 py-4 rounded-2xl flex-row items-center"
+              >
+                <Ionicons name="musical-notes" size={24} color="#000000" />
+                <Text className="text-black text-lg font-semibold ml-3">Start Vibing</Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -166,7 +144,6 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-black">
       <StatusBar style="light" />
-      
       <PagerView
         ref={pagerRef}
         style={{ flex: 1 }}
@@ -179,15 +156,14 @@ export default function HomeScreen() {
             <MusicFeedCard
               track={track}
               isActive={index === currentIndex}
-              onLike={() => handleLike(track)}
-              onSkip={handleSkip}
+              onLike={() => likeTrack(track)}
+              onSkip={() => {}}
               onAddToPlaylist={() => handleAddToPlaylist(track)}
             />
           </View>
         ))}
       </PagerView>
 
-      {/* Floating vibe mode button */}
       <Pressable
         onPress={handleVibeMode}
         className="absolute top-16 right-6 w-12 h-12 bg-green-500 rounded-full items-center justify-center"

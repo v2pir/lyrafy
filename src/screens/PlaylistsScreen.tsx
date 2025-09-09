@@ -40,7 +40,7 @@ export default function PlaylistsScreen() {
     try {
       const playlist = await spotifyService.createPlaylist(
         newPlaylistName.trim(),
-        "Created with VibeSwipe"
+        "Created with Lyrafy"
       );
       
       addPlaylist(playlist);

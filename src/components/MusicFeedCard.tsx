@@ -116,7 +116,7 @@ export default function MusicFeedCard({
           >
             {/* Header */}
             <View className="flex-row justify-between items-center px-6 pt-16 pb-4">
-              <Text className="text-2xl font-bold text-white">VibeSwipe</Text>
+              <Text className="text-2xl font-bold text-white">Lyrafy</Text>
               <Pressable className="w-10 h-10 bg-black/30 rounded-full items-center justify-center">
                 <Ionicons name="person" size={20} color="#FFFFFF" />
               </Pressable>

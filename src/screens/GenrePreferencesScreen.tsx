@@ -6,8 +6,12 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { StatusBar } from "expo-status-bar";
 import { useMusicStore } from "../state/musicStore";
+import { VibeMode } from "../types/music";
 
-type GenrePreferencesScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "GenrePreferences">;
+type GenrePreferencesScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "GenrePreferences"
+>;
 
 const GENRES = [
   { id: "pop", name: "Pop", emoji: "🎵" },
@@ -27,28 +31,50 @@ const GENRES = [
 export default function GenrePreferencesScreen() {
   const navigation = useNavigation<GenrePreferencesScreenNavigationProp>();
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const { userPreferences, setUserPreferences } = useMusicStore();
+  const { userPreferences, setUserPreferences, setVibeMode } = useMusicStore();
 
   const toggleGenre = (genreId: string) => {
-    setSelectedGenres(prev => 
-      prev.includes(genreId) 
+    setSelectedGenres(prev =>
+      prev.includes(genreId)
         ? prev.filter(id => id !== genreId)
-        : prev.length < 5 ? [...prev, genreId] : prev
+        : prev.length < 5
+        ? [...prev, genreId]
+        : prev
     );
   };
 
   const handleContinue = () => {
-    // Save preferences to store
-    setUserPreferences({
-      ...userPreferences,
-      favoriteGenres: selectedGenres,
-    });
-    navigation.navigate("MainTabs");
+    if (selectedGenres.length === 0) return;
+
+    // Save to user preferences
+    setUserPreferences({ ...userPreferences, favoriteGenres: selectedGenres });
+
+    // Create VibeMode based on selection
+    const genreVibe: VibeMode =
+      selectedGenres.length === 1
+        ? {
+            id: selectedGenres[0],
+            name: selectedGenres[0],
+            emoji: GENRES.find(g => g.id === selectedGenres[0])?.emoji || "🎵",
+            description: `${selectedGenres[0]} vibes`,
+            gradient: ["#000", "#fff"],
+          }
+        : {
+            id: selectedGenres.join("_"),
+            name: "Mixed Vibe",
+            emoji: "🎶",
+            description: "A mix of your selected genres",
+            gradient: ["#000", "#fff"],
+          };
+
+    setVibeMode(genreVibe);
+
+    // ✅ Correct navigation call
+    navigation.navigate("VibeMode", { vibeMode: genreVibe });
   };
 
-  const handleSkip = () => {
-    navigation.navigate("MainTabs");
-  };
+
+  const handleSkip = () => navigation.navigate("MainTabs");
 
   return (
     <SafeAreaView className="flex-1 bg-black">
@@ -63,7 +89,7 @@ export default function GenrePreferencesScreen() {
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
           <View className="flex-row flex-wrap justify-between">
-            {GENRES.map((genre) => (
+            {GENRES.map(genre => (
               <Pressable
                 key={genre.id}
                 onPress={() => toggleGenre(genre.id)}
@@ -74,9 +100,11 @@ export default function GenrePreferencesScreen() {
                 }`}
               >
                 <Text className="text-3xl text-center mb-2">{genre.emoji}</Text>
-                <Text className={`text-center font-medium ${
-                  selectedGenres.includes(genre.id) ? "text-black" : "text-white"
-                }`}>
+                <Text
+                  className={`text-center font-medium ${
+                    selectedGenres.includes(genre.id) ? "text-black" : "text-white"
+                  }`}
+                >
                   {genre.name}
                 </Text>
               </Pressable>
@@ -92,9 +120,11 @@ export default function GenrePreferencesScreen() {
               selectedGenres.length > 0 ? "bg-green-500" : "bg-gray-700"
             }`}
           >
-            <Text className={`text-center text-lg font-semibold ${
-              selectedGenres.length > 0 ? "text-black" : "text-gray-400"
-            }`}>
+            <Text
+              className={`text-center text-lg font-semibold ${
+                selectedGenres.length > 0 ? "text-black" : "text-gray-400"
+              }`}
+            >
               Continue
             </Text>
           </Pressable>
