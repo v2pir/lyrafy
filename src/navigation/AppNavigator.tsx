@@ -8,6 +8,7 @@ import WelcomeScreen from "../screens/WelcomeScreen";
 import LoginScreen from "../screens/LoginScreen";
 import GenrePreferencesScreen from "../screens/GenrePreferencesScreen";
 import HomeScreen from "../screens/HomeScreen";
+import VibeSelectionScreen from "../screens/VibeSelectionScreen";
 import VibeModeScreen from "../screens/VibeModeScreen";
 import PlaylistsScreen from "../screens/PlaylistsScreen";
 import SearchScreen from "../screens/SearchScreen";
@@ -19,6 +20,7 @@ export type RootStackParamList = {
   Login: undefined;
   GenrePreferences: undefined;
   MainTabs: undefined;
+  VibeSelection: undefined;
   VibeMode: { vibeMode: VibeMode };
 };
 
@@ -83,6 +85,14 @@ export default function AppNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="GenrePreferences" component={GenrePreferencesScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen 
+        name="VibeSelection" 
+        component={VibeSelectionScreen}
+        options={{
+          presentation: "modal",
+          gestureEnabled: true,
+        }}
+      />
       <Stack.Screen 
         name="VibeMode" 
         component={VibeModeScreen}

@@ -1,86 +1,31 @@
-import React, { useEffect, useState, useRef } from "react";
-import { View, Text, Pressable, Dimensions, Alert } from "react-native";
+import React from "react";
+import { View, Text, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import PagerView from "react-native-pager-view";
 import { useMusicStore } from "../state/musicStore";
 import { useAuthStore } from "../state/authStore";
-import { spotifyService } from "../services/spotifyService";
 import { authService } from "../services/authService";
-import MusicFeedCard from "../components/MusicFeedCard";
-import { SpotifyTrack } from "../types/music";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const pagerRef = useRef<PagerView>(null);
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const { feedTracks, currentVibeMode, setFeedTracks, likeTrack, userPreferences } = useMusicStore();
+  const { currentVibeMode } = useMusicStore();
   const { isAuthenticated } = useAuthStore();
 
-  const handleVibeMode = () => navigation.navigate("VibeMode");
-
-  const loadRecommendations = async () => {
-    const token = await spotifyService.getAccessToken();
-    if (!token) {
-      console.warn("⚠️ No access token yet, forcing re-auth...");
-      const success = await authService.authenticateWithSpotify();
-      if (!success) return;
-    }
-
-    setIsLoading(true);
-    try {
-      let tracks: SpotifyTrack[] = [];
-
-      if (currentVibeMode?.name) {
-        console.log("🎛️ Loading recommendations for vibe mode:", currentVibeMode.name);
-        tracks = await spotifyService.getRecommendationsForVibeMode(
-          currentVibeMode,
-          await spotifyService.getUserTopTracks()
-        );
-      } else if (userPreferences.favoriteGenres.length > 0) {
-        console.log("🎛️ Loading recommendations based on favorite genres:", userPreferences.favoriteGenres);
-        const query = userPreferences.favoriteGenres.join(" ");
-        tracks = await spotifyService.getRecommendations({ query, limit: 50 });
-      } else {
-        console.log("⚠️ No vibe mode or genres — using top 50 tracks");
-        tracks = (await spotifyService.getUserTopTracks()).slice(0, 50);
-      }
-
-      const tracksWithPreviews = tracks.filter(track => track.preview_url);
-      setFeedTracks(tracksWithPreviews);
-    } catch (error) {
-      console.error("Error loading recommendations:", error);
-      Alert.alert("Error", "Unable to load music recommendations. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleVibeMode = () => {
+    navigation.navigate("GenrePreferences");
   };
 
-  useEffect(() => {
-    const init = async () => {
-      if (!isAuthenticated) return;
-      const token = await spotifyService.getAccessToken();
-      if (!token) return;
-      if (feedTracks.length === 0) await loadRecommendations();
-    };
-    init();
-  }, [isAuthenticated, currentVibeMode]);
-
-  const handleAddToPlaylist = (track: SpotifyTrack) => {
-    Alert.alert("Add to Playlist", `"${track.name}" will be added to your playlist.`);
+  const handleCreatePlaylist = () => {
+    navigation.navigate("VibeSelection");
   };
 
-  const handlePageSelected = (e: any) => setCurrentIndex(e.nativeEvent.position);
+  // No need to load tracks on home screen anymore
 
   if (!isAuthenticated) {
     return (
@@ -109,68 +54,80 @@ export default function HomeScreen() {
     );
   }
 
-  if ((feedTracks.length === 0 && !isLoading) || isLoading) {
-    return (
-      <SafeAreaView className="flex-1 bg-black">
-        <StatusBar style="light" />
-        <View className="flex-1 justify-center items-center px-6">
-          {isLoading ? (
-            <>
-              <Ionicons name="musical-notes" size={48} color="#1DB954" />
-              <Text className="text-white text-lg mt-4">Loading your vibe...</Text>
-            </>
-          ) : (
-            <>
-              <Text className="text-xl text-gray-300 text-center mb-4">
-                Ready to discover new music?
-              </Text>
-              <Text className="text-base text-gray-400 text-center mb-8">
-                Choose your vibe and start swiping through personalized tracks
-              </Text>
-              <Pressable
-                onPress={handleVibeMode}
-                className="bg-green-500 px-8 py-4 rounded-2xl flex-row items-center"
-              >
-                <Ionicons name="musical-notes" size={24} color="#000000" />
-                <Text className="text-black text-lg font-semibold ml-3">Start Vibing</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // No loading state needed anymore
 
   return (
-    <View className="flex-1 bg-black">
+    <SafeAreaView className="flex-1 bg-black">
       <StatusBar style="light" />
-      <PagerView
-        ref={pagerRef}
-        style={{ flex: 1 }}
-        orientation="vertical"
-        onPageSelected={handlePageSelected}
-        initialPage={0}
-      >
-        {feedTracks.map((track, index) => (
-          <View key={track.id} style={{ height: SCREEN_HEIGHT }}>
-            <MusicFeedCard
-              track={track}
-              isActive={index === currentIndex}
-              onLike={() => likeTrack(track)}
-              onSkip={() => {}}
-              onAddToPlaylist={() => handleAddToPlaylist(track)}
-            />
-          </View>
-        ))}
-      </PagerView>
+      
+      <View className="flex-1 px-6 py-8">
+        {/* Header */}
+        <View className="items-center mb-12">
+          <Ionicons name="musical-notes" size={64} color="#1DB954" />
+          <Text className="text-4xl font-bold text-white text-center mt-4 mb-2">
+            Lyrafy
+          </Text>
+          <Text className="text-gray-400 text-center text-lg">
+            Discover your perfect music vibe
+          </Text>
+        </View>
 
-      <Pressable
-        onPress={handleVibeMode}
-        className="absolute top-16 right-6 w-12 h-12 bg-green-500 rounded-full items-center justify-center"
-        style={{ zIndex: 10 }}
-      >
-        <Ionicons name="options" size={24} color="#000000" />
-      </Pressable>
-    </View>
+        {/* Main Action Buttons */}
+        <View className="flex-1 justify-center space-y-6">
+          {/* Choose Vibe Button */}
+          <Pressable
+            onPress={handleVibeMode}
+            className="bg-green-500 px-8 py-6 rounded-2xl flex-row items-center justify-center"
+          >
+            <Ionicons name="musical-notes" size={28} color="#000000" />
+            <Text className="text-black text-xl font-bold ml-4">
+              Choose Your Vibe
+            </Text>
+            <Ionicons name="chevron-forward" size={24} color="#000000" className="ml-2" />
+          </Pressable>
+
+          {/* Create Playlist Button */}
+          <Pressable
+            onPress={handleCreatePlaylist}
+            className="bg-gray-800 px-8 py-6 rounded-2xl flex-row items-center justify-center border border-gray-600"
+          >
+            <Ionicons name="add-circle" size={28} color="#FFFFFF" />
+            <Text className="text-white text-xl font-bold ml-4">
+              Create Playlist
+            </Text>
+            <Ionicons name="chevron-forward" size={24} color="#FFFFFF" className="ml-2" />
+          </Pressable>
+
+          {/* Quick Actions */}
+          <View className="mt-8">
+            <Text className="text-gray-400 text-center mb-4">Quick Actions</Text>
+            <View className="flex-row justify-center space-x-4">
+              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
+                <Ionicons name="heart" size={24} color="#FFFFFF" />
+                <Text className="text-white text-sm mt-2">Liked Songs</Text>
+              </Pressable>
+              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
+                <Ionicons name="time" size={24} color="#FFFFFF" />
+                <Text className="text-white text-sm mt-2">Recently Played</Text>
+              </Pressable>
+              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
+                <Ionicons name="trending-up" size={24} color="#FFFFFF" />
+                <Text className="text-white text-sm mt-2">Trending</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        {/* Current Vibe Display */}
+        {currentVibeMode && (
+          <View className="bg-gray-900 px-4 py-3 rounded-xl mb-4">
+            <Text className="text-gray-400 text-center text-sm mb-1">Current Vibe</Text>
+            <Text className="text-white text-center text-lg font-semibold">
+              {currentVibeMode.emoji} {currentVibeMode.name}
+            </Text>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }

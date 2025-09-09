@@ -190,9 +190,57 @@ class SpotifyService {
       return userTopTracks.slice(0, 50);
     }
 
-    const query = vibeMode.name;
-    console.log("🎯 Getting tracks for vibe mode:", query);
-    return this.getRecommendations({ query, limit: 50 });
+    console.log("🎯 Getting tracks for vibe mode:", vibeMode.name);
+    
+    // Start with empty array - only vibe-specific tracks
+    const allTracks: SpotifyTrack[] = [];
+    
+    // Add vibe-specific searches
+    const vibeSearches = [
+      `${vibeMode.name} music`,
+      `popular ${vibeMode.name}`,
+      `${vibeMode.name} hits`,
+      `trending ${vibeMode.name}`,
+      `best ${vibeMode.name} songs`,
+      `${vibeMode.name} 2024`,
+      `${vibeMode.name} 2023`,
+      `top ${vibeMode.name} artists`
+    ];
+    
+    // Search for vibe-specific tracks
+    for (const searchTerm of vibeSearches) {
+      try {
+        const tracks = await this.searchTracks(searchTerm, 30);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} tracks for "${searchTerm}"`);
+      } catch (err) {
+        console.warn(`Failed to search for "${searchTerm}":`, err);
+      }
+    }
+    
+    // Add some popular tracks by searching for well-known artists
+    const popularArtists = [
+      "Drake", "Taylor Swift", "The Weeknd", "Billie Eilish", "Ariana Grande",
+      "Ed Sheeran", "Post Malone", "Dua Lipa", "Olivia Rodrigo", "Harry Styles",
+      "Bad Bunny", "Travis Scott", "Kendrick Lamar", "J. Cole", "Future"
+    ];
+    
+    for (const artist of popularArtists) {
+      try {
+        const tracks = await this.searchTracks(`artist:${artist}`, 25);
+        allTracks.push(...tracks);
+      } catch (err) {
+        console.warn(`Failed to search for artist "${artist}":`, err);
+      }
+    }
+    
+    // Remove duplicates and return up to 300 tracks
+    const uniqueTracks = allTracks.filter((track, index, self) => 
+      index === self.findIndex(t => t.id === track.id)
+    );
+    
+    console.log(`Found ${uniqueTracks.length} unique tracks for vibe mode`);
+    return uniqueTracks.slice(0, 300);
   }
 
   async getUserPlaylists(): Promise<SpotifyPlaylist[]> {
