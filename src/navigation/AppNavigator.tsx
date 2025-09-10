@@ -97,8 +97,9 @@ export default function AppNavigator() {
         name="VibeMode" 
         component={VibeModeScreen}
         options={{
-          presentation: "modal",
+          presentation: "fullScreenModal",
           gestureEnabled: true,
+          animation: "slide_from_bottom",
         }}
       />
     </Stack.Navigator>

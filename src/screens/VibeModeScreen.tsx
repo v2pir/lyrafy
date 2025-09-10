@@ -35,6 +35,11 @@ export default function VibeModeScreen() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingSwipe, setPendingSwipe] = useState<"left" | "right" | "exit" | null>(null);
+  const [isCrossfading, setIsCrossfading] = useState(false);
+  const [isPreloading, setIsPreloading] = useState(false);
+  
+  // Audio cache to store pre-loaded sounds
+  const audioCache = useRef<Map<string, Audio.Sound>>(new Map());
   
   // Use ref to store sound so we can access it from gesture handler
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -166,6 +171,13 @@ export default function VibeModeScreen() {
   };
 
 
+  // Preload sounds when tracks are loaded
+  useEffect(() => {
+    if (feedTracks.length > 0) {
+      preloadAllSounds(feedTracks);
+    }
+  }, [feedTracks]);
+
   // Play the current track when index changes
   useEffect(() => {
     playCurrentTrack();
@@ -177,6 +189,7 @@ export default function VibeModeScreen() {
       console.log("🧹 Component unmounting - cleaning up audio");
       isMountedRef.current = false;
       forceStopAudio();
+      cleanupAudioCache();
     };
   }, []);
 
@@ -196,6 +209,65 @@ export default function VibeModeScreen() {
     };
   }, []);
 
+  // Cleanup audio instances when they change
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(console.error);
+      }
+    };
+  }, [sound]);
+
+  // Pre-load all sounds when tracks are available
+  const preloadAllSounds = async (tracks: SpotifyTrack[]) => {
+    console.log("🎵 Pre-loading sounds for", tracks.length, "tracks");
+    setIsPreloading(true);
+    
+    try {
+      // Initialize audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Load sounds in batches to avoid overwhelming the system
+      const batchSize = 3; // Smaller batches for faster loading
+      for (let i = 0; i < tracks.length; i += batchSize) {
+        const batch = tracks.slice(i, i + batchSize);
+        
+        await Promise.all(
+          batch.map(async (track) => {
+            if (track.preview_url && !audioCache.current.has(track.id)) {
+              try {
+                const { sound } = await Audio.Sound.createAsync(
+                  { uri: track.preview_url },
+                  { shouldPlay: false, volume: 0.0 }
+                );
+                audioCache.current.set(track.id, sound);
+                console.log("✅ Pre-loaded:", track.name);
+              } catch (err) {
+                console.log("❌ Failed to pre-load:", track.name, err);
+              }
+            }
+          })
+        );
+        
+        // Smaller delay between batches
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      console.log("🎵 Pre-loading complete! Loaded", audioCache.current.size, "sounds");
+      
+    } catch (err) {
+      console.error("❌ Error pre-loading sounds:", err);
+    } finally {
+      setIsPreloading(false);
+    }
+  };
+
   const playCurrentTrack = async () => {
     const track = feedTracks[currentIndex];
     if (!track?.preview_url) {
@@ -204,52 +276,165 @@ export default function VibeModeScreen() {
     }
     
     try {
-      // Stop and clean up previous sound
-      if (sound) {
-        console.log("🔄 Stopping previous audio");
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-        soundRef.current = null;
+      console.log("🎵 Playing track:", track.name);
+      
+      // Wait for pre-loading to complete if still in progress
+      if (isPreloading) {
+        console.log("⏳ Waiting for pre-loading to complete...");
+        // Wait for pre-loading to finish
+        while (isPreloading) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
       
-      // Initialize audio mode for iOS
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+      // Get pre-loaded sound from cache
+      let cachedSound = audioCache.current.get(track.id);
       
-      console.log("🎵 Playing track:", track.name, "URL:", track.preview_url);
+      // If no cached sound, try to load it on-demand
+      if (!cachedSound) {
+        console.log("⚠️ No cached sound, loading on-demand:", track.name);
+        try {
+          const { sound: newSound } = await Audio.Sound.createAsync(
+            { uri: track.preview_url },
+            { shouldPlay: false, volume: 0.0 }
+          );
+          audioCache.current.set(track.id, newSound);
+          cachedSound = newSound;
+          console.log("✅ Loaded on-demand:", track.name);
+        } catch (err) {
+          console.error("❌ Failed to load on-demand:", track.name, err);
+          return;
+        }
+      }
       
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: track.preview_url },
-        { shouldPlay: true, volume: 1.0 }
-      );
-      setSound(newSound);
-      soundRef.current = newSound;
+      // If we have a current sound, crossfade to the new one
+      if (sound && !isCrossfading) {
+        await crossfadeToNewTrack(cachedSound);
+      } else {
+        // First track or no current sound - play immediately
+        if (sound) {
+          try {
+            await sound.stopAsync();
+          } catch (err) {
+            console.log("Error stopping previous sound:", err);
+          }
+        }
+        
+        // Reset and play cached sound
+        await cachedSound.setPositionAsync(0);
+        await cachedSound.setVolumeAsync(1.0);
+        await cachedSound.playAsync();
+        
+        setSound(cachedSound);
+        soundRef.current = cachedSound;
+      }
       
     } catch (err) {
       console.error("❌ Error playing preview:", err);
     }
   };
 
-  const stopAllAudio = async () => {
-    if (sound || soundRef.current) {
-      try {
-        console.log("🔄 Stopping all audio");
-        const currentSound = sound || soundRef.current;
-        if (currentSound) {
-          await currentSound.stopAsync();
-          await currentSound.unloadAsync();
+  const crossfadeToNewTrack = async (newSound: Audio.Sound) => {
+    if (isCrossfading || !sound) return;
+    
+    setIsCrossfading(true);
+    console.log("🎵 Starting crossfade to new track");
+    
+    try {
+      // Reset new sound to beginning
+      await newSound.setPositionAsync(0);
+      await newSound.setVolumeAsync(0.0);
+      await newSound.playAsync();
+      
+      // Crossfade duration (0.4 seconds - super fast!)
+      const crossfadeDuration = 400;
+      const steps = 20; // Fewer steps for faster transition
+      const stepDuration = crossfadeDuration / steps;
+      
+      // Fade out current sound and fade in new sound
+      for (let i = 0; i <= steps; i++) {
+        if (!isMountedRef.current) break; // Stop if component unmounted
+        
+        const progress = i / steps;
+        const currentVolume = 1.0 - progress; // Fade out
+        const nextVolume = progress; // Fade in
+        
+        // Update volumes
+        try {
+          await sound.setVolumeAsync(currentVolume);
+          await newSound.setVolumeAsync(nextVolume);
+        } catch (err) {
+          console.log("Error updating volumes:", err);
         }
-        setSound(null);
-        soundRef.current = null;
-      } catch (err) {
-        console.error("Error stopping audio:", err);
+        
+        // Wait for next step
+        await new Promise(resolve => setTimeout(resolve, stepDuration));
       }
+      
+      // Stop old sound
+      try {
+        await sound.stopAsync();
+      } catch (err) {
+        console.log("Error stopping old sound:", err);
+      }
+      
+      // Set new sound as current
+      setSound(newSound);
+      soundRef.current = newSound;
+      
+      console.log("✅ Crossfade completed");
+      
+    } catch (err) {
+      console.error("❌ Error during crossfade:", err);
+      // Fallback: just play the new track normally
+      try {
+        await sound.stopAsync();
+        await newSound.setPositionAsync(0);
+        await newSound.setVolumeAsync(1.0);
+        await newSound.playAsync();
+        setSound(newSound);
+        soundRef.current = newSound;
+      } catch (fallbackErr) {
+        console.error("❌ Fallback also failed:", fallbackErr);
+      }
+    } finally {
+      setIsCrossfading(false);
+    }
+  };
+
+
+  const stopAllAudio = async () => {
+    try {
+      console.log("🔄 Stopping all audio");
+      
+      // Stop current sound
+      if (sound) {
+        await sound.stopAsync();
+        setSound(null);
+      }
+      
+      // Clear refs
+      soundRef.current = null;
+      
+    } catch (err) {
+      console.error("Error stopping audio:", err);
+    }
+  };
+
+  // Clean up audio cache on unmount
+  const cleanupAudioCache = async () => {
+    console.log("🧹 Cleaning up audio cache");
+    try {
+      for (const [trackId, cachedSound] of audioCache.current) {
+        try {
+          await cachedSound.unloadAsync();
+        } catch (err) {
+          console.log("Error unloading cached sound:", err);
+        }
+      }
+      audioCache.current.clear();
+    } catch (err) {
+      console.error("Error cleaning up audio cache:", err);
     }
   };
 
@@ -262,8 +447,11 @@ export default function VibeModeScreen() {
     // Stop current audio immediately
     await stopAllAudio();
     
-    // Navigate to home page (MainTabs)
-    navigation.navigate("MainTabs");
+    // Reset navigation stack to ensure proper layout
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "MainTabs" }],
+    });
   };
 
   const swipeHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
@@ -377,11 +565,17 @@ export default function VibeModeScreen() {
         setTimeout(async () => {
           try {
             await stopAllAudio();
-            navigation.navigate("MainTabs");
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "MainTabs" }],
+            });
           } catch (error) {
             console.error("Error during exit:", error);
             // Force navigation even if cleanup fails
-            navigation.navigate("MainTabs");
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "MainTabs" }],
+            });
           }
         }, 100);
       } else {
@@ -404,7 +598,9 @@ export default function VibeModeScreen() {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-black">
         <Text className="text-white text-lg">
-          {isLoading ? "Loading tracks with previews..." : "No tracks available"}
+          {isLoading ? "Loading tracks with previews..." : 
+           isPreloading ? "Pre-loading audio for smooth playback..." : 
+           "No tracks available"}
         </Text>
       </SafeAreaView>
     );
@@ -421,7 +617,7 @@ export default function VibeModeScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
+    <View style={{ flex: 1, backgroundColor: "#000", paddingTop: 44 }}>
       <StatusBar style="light" />
       
       <PanGestureHandler 
@@ -444,7 +640,14 @@ export default function VibeModeScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.logo}>Lyrafy</Text>
-            <Text style={styles.exitHint}>Swipe down to exit</Text>
+            <View style={styles.headerRight}>
+              {isCrossfading && (
+                <View style={styles.crossfadeIndicator}>
+                  <Text style={styles.crossfadeText}>🎵 Blending...</Text>
+                </View>
+              )}
+              <Text style={styles.exitHint}>Swipe down to exit</Text>
+            </View>
           </View>
           
           {/* Main Content */}
@@ -480,7 +683,7 @@ export default function VibeModeScreen() {
           </View>
         </Animated.View>
       </PanGestureHandler>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -518,6 +721,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: "#1DB954",
+  },
+  headerRight: {
+    alignItems: "flex-end",
+  },
+  crossfadeIndicator: {
+    backgroundColor: "rgba(29, 185, 84, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  crossfadeText: {
+    color: "#1DB954",
+    fontSize: 12,
+    fontWeight: "600",
   },
   exitHint: {
     color: "#999",
