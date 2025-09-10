@@ -4,13 +4,14 @@ import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState } from "
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from "react-native-gesture-handler";
+import { PanGestureHandler, TapGestureHandler, PanGestureHandlerGestureEvent, TapGestureHandlerGestureEvent } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
   useAnimatedGestureHandler,
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withSequence,
   runOnJS,
 } from "react-native-reanimated";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -28,7 +29,7 @@ export default function VibeModeScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const vibeMode = (route.params as { vibeMode: VibeMode })?.vibeMode;
-  const { setFeedTracks } = useMusicStore();
+  const { setFeedTracks, likeTrack, unlikeTrack, isTrackLiked } = useMusicStore();
 
   const [feedTracks, setLocalTracks] = useState<SpotifyTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -37,6 +38,8 @@ export default function VibeModeScreen() {
   const [pendingSwipe, setPendingSwipe] = useState<"left" | "right" | "exit" | null>(null);
   const [isCrossfading, setIsCrossfading] = useState(false);
   const [isPreloading, setIsPreloading] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [showLikeAnimation, setShowLikeAnimation] = useState(false);
   
   // Audio cache to store pre-loaded sounds
   const audioCache = useRef<Map<string, Audio.Sound>>(new Map());
@@ -80,6 +83,11 @@ export default function VibeModeScreen() {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const rotation = useSharedValue(0);
+  
+  // Like animation values
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+  const heartTranslateY = useSharedValue(0);
 
   // Load initial Spotify tracks (show immediately, then find previews in background)
   useEffect(() => {
@@ -180,8 +188,40 @@ export default function VibeModeScreen() {
 
   // Play the current track when index changes
   useEffect(() => {
-    playCurrentTrack();
-  }, [currentIndex, feedTracks]);
+    // Only play if we have tracks and we're not still loading
+    if (feedTracks.length > 0 && !isLoading) {
+      // Add a small delay for the first track to ensure pre-loading has started
+      if (currentIndex === 0) {
+        setTimeout(() => {
+          playCurrentTrack();
+        }, 500);
+      } else {
+        playCurrentTrack();
+      }
+    }
+  }, [currentIndex, feedTracks, isLoading]);
+
+  // Update like status when track changes
+  useEffect(() => {
+    const track = feedTracks[currentIndex];
+    if (track) {
+      const liked = isTrackLiked(track.id);
+      setIsLiked(liked);
+      
+      // Show/hide heart based on like status
+      if (liked) {
+        setShowLikeAnimation(true);
+        heartScale.value = 1;
+        heartOpacity.value = 1;
+        heartTranslateY.value = -20;
+      } else {
+        setShowLikeAnimation(false);
+        heartScale.value = 0;
+        heartOpacity.value = 0;
+        heartTranslateY.value = 0;
+      }
+    }
+  }, [currentIndex, feedTracks, isTrackLiked]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -276,16 +316,7 @@ export default function VibeModeScreen() {
     }
     
     try {
-      console.log("🎵 Playing track:", track.name);
-      
-      // Wait for pre-loading to complete if still in progress
-      if (isPreloading) {
-        console.log("⏳ Waiting for pre-loading to complete...");
-        // Wait for pre-loading to finish
-        while (isPreloading) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
+      console.log("🎵 Playing track:", track.name, "Index:", currentIndex);
       
       // Get pre-loaded sound from cache
       let cachedSound = audioCache.current.get(track.id);
@@ -438,6 +469,72 @@ export default function VibeModeScreen() {
     }
   };
 
+  const handleLike = async () => {
+    const track = feedTracks[currentIndex];
+    if (!track) return;
+
+    try {
+      if (isLiked) {
+        // Unlike the track
+        console.log("💔 Unliking track:", track.name);
+        unlikeTrack(track.id);
+        setIsLiked(false);
+        
+        // Hide heart with fade out animation
+        heartOpacity.value = withTiming(0, { duration: 300 });
+        heartTranslateY.value = withTiming(-40, { duration: 300 });
+        setTimeout(() => {
+          setShowLikeAnimation(false);
+        }, 300);
+        
+        // Remove from Spotify liked songs
+        try {
+          await spotifyService.removeTrackFromLikedSongs(track.id);
+          console.log("✅ Removed from Spotify liked songs");
+        } catch (err) {
+          console.error("❌ Failed to remove from Spotify:", err);
+        }
+      } else {
+        // Like the track
+        console.log("❤️ Liking track:", track.name);
+        likeTrack(track, vibeMode?.name);
+        setIsLiked(true);
+        
+        // Trigger like animation
+        triggerLikeAnimation();
+        
+        // Add to Spotify liked songs
+        try {
+          await spotifyService.addTrackToLikedSongs(track.id);
+          console.log("✅ Added to Spotify liked songs");
+        } catch (err) {
+          console.error("❌ Failed to add to Spotify:", err);
+        }
+      }
+    } catch (err) {
+      console.error("❌ Error handling like:", err);
+    }
+  };
+
+  const triggerLikeAnimation = () => {
+    setShowLikeAnimation(true);
+    
+    // Reset animation values
+    heartScale.value = 0;
+    heartOpacity.value = 0;
+    heartTranslateY.value = 0;
+    
+    // Animate heart appearing
+    heartScale.value = withSequence(
+      withTiming(1.2, { duration: 200 }),
+      withTiming(1, { duration: 100 })
+    );
+    heartOpacity.value = withTiming(1, { duration: 200 });
+    heartTranslateY.value = withTiming(-20, { duration: 200 });
+    
+    // Keep heart visible - don't auto-hide
+  };
+
   const exitVibeMode = async () => {
     console.log("🚪 Exiting vibe mode");
     
@@ -450,12 +547,19 @@ export default function VibeModeScreen() {
     // Reset navigation stack to ensure proper layout
     navigation.reset({
       index: 0,
-      routes: [{ name: "MainTabs" }],
+      routes: [{ name: "MainTabs" as never }],
     });
   };
 
-  const swipeHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
-    onStart: (_, ctx: any) => {
+  const doubleTapHandler = useAnimatedGestureHandler<TapGestureHandlerGestureEvent>({
+    onEnd: () => {
+      console.log("👆 Double tap detected - toggling like");
+      runOnJS(handleLike)();
+    },
+  });
+
+  const swipeHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent, { startX: number; startY: number }>({
+    onStart: (_, ctx) => {
       try {
         console.log("🔄 Gesture started");
         ctx.startX = translateX.value;
@@ -567,14 +671,14 @@ export default function VibeModeScreen() {
             await stopAllAudio();
             navigation.reset({
               index: 0,
-              routes: [{ name: "MainTabs" }],
+              routes: [{ name: "MainTabs" as never }],
             });
           } catch (error) {
             console.error("Error during exit:", error);
             // Force navigation even if cleanup fails
             navigation.reset({
               index: 0,
-              routes: [{ name: "MainTabs" }],
+              routes: [{ name: "MainTabs" as never }],
             });
           }
         }, 100);
@@ -592,6 +696,14 @@ export default function VibeModeScreen() {
       { translateY: translateY.value },
       { rotate: `${rotation.value}deg` },
     ],
+  }));
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: heartScale.value },
+      { translateY: heartTranslateY.value },
+    ],
+    opacity: heartOpacity.value,
   }));
 
   if (isLoading || !feedTracks.length) {
@@ -620,13 +732,18 @@ export default function VibeModeScreen() {
     <View style={{ flex: 1, backgroundColor: "#000", paddingTop: 44 }}>
       <StatusBar style="light" />
       
-      <PanGestureHandler 
-        onGestureEvent={swipeHandler}
-        onHandlerStateChange={(event) => {
-          console.log("🔄 Gesture state change:", event.nativeEvent.state);
-        }}
+      <TapGestureHandler
+        numberOfTaps={2}
+        onGestureEvent={doubleTapHandler}
       >
-        <Animated.View style={[styles.fullScreen, animatedStyle]}>
+        <Animated.View style={styles.fullScreen}>
+          <PanGestureHandler 
+            onGestureEvent={swipeHandler}
+            onHandlerStateChange={(event) => {
+              console.log("🔄 Gesture state change:", event.nativeEvent.state);
+            }}
+          >
+            <Animated.View style={[styles.fullScreen, animatedStyle]}>
           {/* Background Image */}
           <Image
             source={{ uri: track.album.images[0]?.url }}
@@ -677,12 +794,21 @@ export default function VibeModeScreen() {
             </View>
           </View>
           
+          {/* Animated Like Heart */}
+          {showLikeAnimation && (
+            <Animated.View style={[styles.likeHeart, heartAnimatedStyle]}>
+              <Text style={styles.heartEmoji}>❤️</Text>
+            </Animated.View>
+          )}
+
           {/* Swipe Instructions */}
           <View style={styles.swipeInstructions}>
-            <Text style={styles.swipeText}>Swipe left to skip • Swipe right to like</Text>
+            <Text style={styles.swipeText}>Double tap to like • Swipe left to skip • Swipe right to like</Text>
           </View>
+            </Animated.View>
+          </PanGestureHandler>
         </Animated.View>
-      </PanGestureHandler>
+      </TapGestureHandler>
     </View>
   );
 }
@@ -794,17 +920,30 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     textAlign: "center",
   },
+  likeHeart: {
+    position: "absolute",
+    top: 80,
+    right: 30,
+    zIndex: 20,
+  },
+  heartEmoji: {
+    fontSize: 40,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
   swipeInstructions: {
     position: "absolute",
-    bottom: 40,
+    bottom: 20,
     left: 0,
     right: 0,
     alignItems: "center",
     zIndex: 10,
   },
   swipeText: {
-    color: "#999",
-    fontSize: 16,
-    fontWeight: "500",
+    color: "#333",
+    fontSize: 10,
+    fontWeight: "400",
+    opacity: 0.6,
   },
 });

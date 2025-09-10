@@ -78,7 +78,19 @@ class SpotifyService {
       throw new Error(`Spotify API error: ${response.status}`);
     }
 
-    return response.json();
+    // Handle empty responses (like 204 No Content for DELETE requests)
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return {} as T;
+    }
+
+    // Check if response has content before trying to parse JSON
+    const text = await response.text();
+    if (!text.trim()) {
+      return {} as T;
+    }
+
+    return JSON.parse(text);
   }
 
   /** --------------------------
@@ -260,6 +272,27 @@ class SpotifyService {
     await this.makeRequest(`/playlists/${playlistId}/tracks`, {
       method: "POST",
       body: JSON.stringify({ uris: trackUris }),
+    });
+  }
+
+  async removeTracksFromPlaylist(playlistId: string, trackUris: string[]): Promise<void> {
+    await this.makeRequest(`/playlists/${playlistId}/tracks`, {
+      method: "DELETE",
+      body: JSON.stringify({ uris: trackUris }),
+    });
+  }
+
+  async addTrackToLikedSongs(trackId: string): Promise<void> {
+    await this.makeRequest(`/me/tracks`, {
+      method: "PUT",
+      body: JSON.stringify({ ids: [trackId] }),
+    });
+  }
+
+  async removeTrackFromLikedSongs(trackId: string): Promise<void> {
+    await this.makeRequest(`/me/tracks`, {
+      method: "DELETE",
+      body: JSON.stringify({ ids: [trackId] }),
     });
   }
 
