@@ -3,15 +3,18 @@ import { View, Text, Pressable, ScrollView, Alert, TextInput, Modal } from "reac
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useMusicStore } from "../state/musicStore";
 import { useAuthStore } from "../state/authStore";
-import { spotifyService } from "../services/spotifyService";
+import { spotifyServiceBackend } from "../services/spotifyServiceBackend";
 import { SpotifyPlaylist } from "../types/music";
 
 export default function PlaylistsScreen() {
+  const navigation = useNavigation();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(true);
   
   const { userPlaylists, addPlaylist } = useMusicStore();
   const { isAuthenticated } = useAuthStore();
@@ -20,10 +23,20 @@ export default function PlaylistsScreen() {
     if (!isAuthenticated) return;
     
     try {
-      const playlists = await spotifyService.getUserPlaylists();
-      playlists.forEach(playlist => addPlaylist(playlist));
+      setIsLoadingPlaylists(true);
+      const playlists = await spotifyServiceBackend.getUserPlaylists();
+      if (playlists && Array.isArray(playlists)) {
+        playlists.forEach(playlist => {
+          if (playlist && playlist.id) {
+            addPlaylist(playlist);
+          }
+        });
+      }
     } catch (error) {
       console.error("Error loading playlists:", error);
+      Alert.alert("Error", "Failed to load playlists. Please try again.");
+    } finally {
+      setIsLoadingPlaylists(false);
     }
   };
 
@@ -56,13 +69,19 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const handlePlaylistPress = (playlist: SpotifyPlaylist) => {
+    console.log("Playlist pressed:", playlist.name);
+    navigation.navigate("PlaylistDetail" as never, { playlist } as never);
+  };
+
   const renderPlaylistItem = (playlist: SpotifyPlaylist) => (
     <Pressable
       key={playlist.id}
+      onPress={() => handlePlaylistPress(playlist)}
       className="bg-gray-900 p-4 rounded-xl mb-3 flex-row items-center"
     >
       <View className="w-12 h-12 bg-gray-800 rounded-lg mr-4 items-center justify-center">
-        {playlist.images[0]?.url ? (
+        {playlist.images && playlist.images[0]?.url ? (
           <View className="w-full h-full bg-gray-700 rounded-lg" />
         ) : (
           <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
@@ -71,10 +90,10 @@ export default function PlaylistsScreen() {
       
       <View className="flex-1">
         <Text className="text-white text-base font-semibold mb-1" numberOfLines={1}>
-          {playlist.name}
+          {playlist.name || "Untitled Playlist"}
         </Text>
         <Text className="text-gray-400 text-sm">
-          {playlist.tracks.total} tracks
+          {playlist.tracks?.total || 0} tracks
         </Text>
       </View>
       
@@ -116,7 +135,14 @@ export default function PlaylistsScreen() {
 
       {/* Content */}
       <ScrollView className="flex-1 px-6">
-        {userPlaylists.length > 0 ? (
+        {isLoadingPlaylists ? (
+          <View className="flex-1 justify-center items-center mt-32">
+            <Ionicons name="musical-notes-outline" size={64} color="#4B5563" />
+            <Text className="text-xl text-gray-300 text-center mt-4 mb-2">
+              Loading playlists...
+            </Text>
+          </View>
+        ) : userPlaylists.length > 0 ? (
           <View>
             {userPlaylists.map(renderPlaylistItem)}
           </View>

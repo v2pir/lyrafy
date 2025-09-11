@@ -19,6 +19,8 @@ export const SPOTIFY_SCOPES = [
   "playlist-modify-private",
   "playlist-modify-public",
   "user-read-recently-played",
+  "user-read-playback-state",
+  "user-modify-playback-state",
 ];
 
 // ✅ Generate redirect URI dynamically for Expo Go / tunnel

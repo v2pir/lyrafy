@@ -97,13 +97,17 @@ class SpotifyService {
    * TOKEN REFRESH (PKCE SAFE)
    * ------------------------- */
   async refreshAccessToken(): Promise<boolean> {
+    console.log("🔄 Starting token refresh...");
     const refreshToken = await this.getRefreshToken();
     if (!refreshToken) {
       console.error("⚠️ No refresh token found");
       return false;
     }
 
+    console.log("🔍 Refresh token found:", refreshToken.substring(0, 20) + "...");
+
     try {
+      console.log("🔄 Calling Spotify token refresh endpoint...");
       const response = await fetch(SPOTIFY_ACCOUNTS_URL, {
         method: "POST",
         headers: {
@@ -116,6 +120,7 @@ class SpotifyService {
         }).toString(),
       });
 
+      console.log("🔄 Token refresh response status:", response.status);
       const data = await response.json();
 
       if (!response.ok) {
@@ -124,10 +129,12 @@ class SpotifyService {
       }
 
       if (data.access_token) {
+        console.log("✅ New access token received");
         await this.setAccessToken(data.access_token);
 
         // Some refresh responses also return a new refresh token
         if (data.refresh_token) {
+          console.log("✅ New refresh token received");
           await this.setRefreshToken(data.refresh_token);
         }
 
@@ -163,6 +170,11 @@ class SpotifyService {
       return res.items ?? [];
     } catch (err: any) {
       console.error("❌ Failed to fetch top tracks:", err);
+      console.error("❌ Error details:", {
+        timeRange,
+        endpoint,
+        error: err.message || err
+      });
       // Return empty array to prevent breaking recommendations
       return [];
     }
@@ -258,6 +270,25 @@ class SpotifyService {
   async getUserPlaylists(): Promise<SpotifyPlaylist[]> {
     const res = await this.makeRequest<{ items: SpotifyPlaylist[] }>("/me/playlists?limit=50");
     return res.items;
+  }
+
+  async getPlaylistTracks(playlistId: string): Promise<SpotifyTrack[]> {
+    const res = await this.makeRequest<{ items: { track: SpotifyTrack }[] }>(`/playlists/${playlistId}/tracks?limit=100`);
+    return res.items.map(item => item.track).filter(track => track && track.id);
+  }
+
+  async getAudioFeatures(trackIds: string[]): Promise<any[]> {
+    if (trackIds.length === 0) return [];
+    
+    try {
+      const ids = trackIds.join(',');
+      const res = await this.makeRequest<{ audio_features: any[] }>(`/audio-features?ids=${ids}`);
+      return res.audio_features.filter(feature => feature !== null);
+    } catch (error: any) {
+      console.warn("Failed to get audio features:", error.message || error);
+      // Return empty array to allow fallback similarity calculation
+      return [];
+    }
   }
 
   async createPlaylist(name: string, description?: string): Promise<SpotifyPlaylist> {

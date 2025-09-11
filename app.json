@@ -13,11 +13,17 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vanshchhabra.lyrafy"
+      "bundleIdentifier": "com.vanshchhabra.lyrafy",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "package": "com.vanshchhabra.lyrafy",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": true
     },
     "extra": {
       "eas": {

@@ -1,6 +1,6 @@
 // src/screens/VibeModeScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState } from "react-native";
+import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
@@ -17,8 +17,10 @@ import Animated, {
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useMusicStore } from "../state/musicStore";
 import { VibeMode, SpotifyTrack } from "../types/music";
+import { spotifyServiceBackend } from "../services/spotifyServiceBackend";
+import { deezerServiceBackend } from "../services/deezerServiceBackend";
+import { backendService } from "../services/backendService";
 import { spotifyService } from "../services/spotifyService";
-import { deezerService } from "../services/deezerService";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -97,7 +99,7 @@ export default function VibeModeScreen() {
         console.log("🎵 Loading Spotify tracks for vibe:", vibeMode?.name);
         
         // Get ONLY vibe-based recommendations (no user top tracks mixed in)
-        const spotifyTracks = await spotifyService.getRecommendationsForVibeMode(vibeMode, []);
+        const spotifyTracks = await spotifyServiceBackend.getRecommendationsForVibeMode(vibeMode, []);
         
         console.log(`🎵 Found ${spotifyTracks.length} Spotify tracks for ${vibeMode?.name}`);
         
@@ -140,7 +142,7 @@ export default function VibeModeScreen() {
       const spotifyTrack = spotifyTracks[i];
       try {
         // Search for this specific track on Deezer
-        const deezerTracks = await deezerService.searchTracks(
+        const deezerTracks = await deezerServiceBackend.searchTracks(
           `${spotifyTrack.name} ${spotifyTrack.artists[0]?.name}`, 
           3
         );
@@ -489,10 +491,25 @@ export default function VibeModeScreen() {
         
         // Remove from Spotify liked songs
         try {
-          await spotifyService.removeTrackFromLikedSongs(track.id);
-          console.log("✅ Removed from Spotify liked songs");
+          const success = await spotifyServiceBackend.unlikeTrack(track.id);
+          if (success) {
+            console.log("✅ Removed from Spotify liked songs");
+          } else {
+            console.log("⚠️ Failed to remove from Spotify (token may be expired)");
+            // Show user-friendly message
+            Alert.alert(
+              "Authentication Required",
+              "Please log out and log back in to refresh your Spotify connection.",
+              [{ text: "OK" }]
+            );
+          }
         } catch (err) {
           console.error("❌ Failed to remove from Spotify:", err);
+          Alert.alert(
+            "Error",
+            "Failed to remove song from your Spotify library. Please try again.",
+            [{ text: "OK" }]
+          );
         }
       } else {
         // Like the track
@@ -505,10 +522,25 @@ export default function VibeModeScreen() {
         
         // Add to Spotify liked songs
         try {
-          await spotifyService.addTrackToLikedSongs(track.id);
-          console.log("✅ Added to Spotify liked songs");
+          const success = await spotifyServiceBackend.likeTrack(track.id);
+          if (success) {
+            console.log("✅ Added to Spotify liked songs");
+          } else {
+            console.log("⚠️ Failed to add to Spotify (token may be expired)");
+            // Show user-friendly message
+            Alert.alert(
+              "Authentication Required",
+              "Please log out and log back in to refresh your Spotify connection.",
+              [{ text: "OK" }]
+            );
+          }
         } catch (err) {
           console.error("❌ Failed to add to Spotify:", err);
+          Alert.alert(
+            "Error",
+            "Failed to add song to your Spotify library. Please try again.",
+            [{ text: "OK" }]
+          );
         }
       }
     } catch (err) {
@@ -634,8 +666,29 @@ export default function VibeModeScreen() {
     },
   });
 
-  const handleSwipe = (direction: "left" | "right") => {
+  const handleSwipe = async (direction: "left" | "right") => {
     console.log("🔄 handleSwipe called with direction:", direction);
+    
+    // Record interaction with ML backend
+    const currentTrack = feedTracks[currentIndex];
+    if (currentTrack) {
+      try {
+        const userId = "user_123"; // TODO: Get actual user ID from auth store
+        await backendService.recordInteraction(
+          userId,
+          currentTrack.id,
+          direction === "right" ? "like" : "dislike"
+        );
+      } catch (error) {
+        console.log("Failed to record interaction:", error);
+      }
+
+      // Handle like/dislike based on swipe direction
+      if (direction === "right") {
+        likeTrack(currentTrack);
+      }
+      // You can add dislike logic here if needed
+    }
     
     // Reset animation values for next card
     translateX.value = 0;
