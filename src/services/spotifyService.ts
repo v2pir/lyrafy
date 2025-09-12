@@ -193,6 +193,83 @@ class SpotifyService {
     }
   }
 
+  async getRecommendationsBasedOnTracks(userTopTracks: SpotifyTrack[]): Promise<SpotifyTrack[]> {
+    console.log("🎯 Finding songs similar to your top tracks using metadata analysis");
+    
+    const allTracks: SpotifyTrack[] = [];
+    
+    // Extract characteristics from your top tracks (no audio features needed)
+    const characteristics = this.analyzeTrackCharacteristics(userTopTracks);
+    console.log("🎵 Your music characteristics:", characteristics);
+    
+    // Search for similar artists from your top tracks
+    const topArtists = [...new Set(userTopTracks.slice(0, 20).map(t => t.artists[0]?.name).filter(Boolean))];
+    
+    for (const artist of topArtists.slice(0, 10)) { // Top 10 artists
+      try {
+        const tracks = await this.searchTracks(`artist:"${artist}"`, 30);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} tracks by "${artist}"`);
+      } catch (err) {
+        console.warn(`Failed to search for artist "${artist}":`, err);
+      }
+    }
+    
+    // Search for similar genres based on your top tracks
+    const genreTerms = this.extractGenreTerms(userTopTracks);
+    for (const genre of genreTerms.slice(0, 6)) {
+      try {
+        const tracks = await this.searchTracks(genre, 25);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} tracks for genre "${genre}"`);
+      } catch (err) {
+        console.warn(`Failed to search for genre "${genre}":`, err);
+      }
+    }
+    
+    // Search for tracks with similar popularity ranges
+    const popularityRanges = this.getPopularityRanges(userTopTracks);
+    for (const range of popularityRanges) {
+      try {
+        const tracks = await this.searchTracks(`year:${range.year}`, 20);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} tracks from ${range.year}`);
+      } catch (err) {
+        console.warn(`Failed to search for year ${range.year}:`, err);
+      }
+    }
+    
+    // Search for tracks with similar popularity levels
+    const avgPopularity = userTopTracks.reduce((sum, track) => sum + track.popularity, 0) / userTopTracks.length;
+    if (avgPopularity > 70) {
+      // High popularity - search for popular tracks
+      try {
+        const tracks = await this.searchTracks("popular", 20);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} popular tracks`);
+      } catch (err) {
+        console.warn(`Failed to search for popular tracks:`, err);
+      }
+    } else if (avgPopularity < 30) {
+      // Low popularity - search for indie/underground tracks
+      try {
+        const tracks = await this.searchTracks("indie", 20);
+        allTracks.push(...tracks);
+        console.log(`Found ${tracks.length} indie tracks`);
+      } catch (err) {
+        console.warn(`Failed to search for indie tracks:`, err);
+      }
+    }
+    
+    // Remove duplicates and return up to 300 tracks
+    const uniqueTracks = allTracks.filter((track, index, self) => 
+      index === self.findIndex(t => t.id === track.id)
+    );
+    
+    console.log(`Found ${uniqueTracks.length} unique similar tracks`);
+    return uniqueTracks.slice(0, 300);
+  }
+
   async getRecommendationsForVibeMode(
     vibeMode: VibeMode | null,
     userTopTracks: SpotifyTrack[]
@@ -256,8 +333,24 @@ class SpotifyService {
   }
 
   async getUserPlaylists(): Promise<SpotifyPlaylist[]> {
-    const res = await this.makeRequest<{ items: SpotifyPlaylist[] }>("/me/playlists?limit=50");
-    return res.items;
+    try {
+      const res = await this.makeRequest<{ items: SpotifyPlaylist[] }>("/me/playlists?limit=50");
+      return res.items || [];
+    } catch (error) {
+      console.error("Error fetching user playlists:", error);
+      return [];
+    }
+  }
+
+  async getPlaylistTracks(playlistId: string): Promise<SpotifyTrack[]> {
+    try {
+      const res = await this.makeRequest<{ items: { track: SpotifyTrack }[] }>(`/playlists/${playlistId}/tracks?limit=100`);
+      // Filter out null tracks (some playlists have null tracks)
+      return res.items?.map(item => item.track).filter(track => track && track.id) || [];
+    } catch (error) {
+      console.error("Error fetching playlist tracks:", error);
+      return [];
+    }
   }
 
   async createPlaylist(name: string, description?: string): Promise<SpotifyPlaylist> {
@@ -301,6 +394,60 @@ class SpotifyService {
       `/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`
     );
     return res.tracks.items;
+  }
+
+  private analyzeTrackCharacteristics(tracks: SpotifyTrack[]): any {
+    const avgPopularity = tracks.reduce((sum, track) => sum + track.popularity, 0) / tracks.length;
+    
+    return {
+      avgPopularity,
+      genres: this.extractGenreTerms(tracks),
+      years: this.getPopularityRanges(tracks),
+      artists: [...new Set(tracks.slice(0, 10).map(t => t.artists[0]?.name).filter(Boolean))]
+    };
+  }
+
+  private getPopularityRanges(tracks: SpotifyTrack[]): { year: number; count: number }[] {
+    const yearCounts: { [year: number]: number } = {};
+    
+    tracks.forEach(track => {
+      const year = new Date(track.album.release_date).getFullYear();
+      if (year && year > 1950 && year < 2030) {
+        yearCounts[year] = (yearCounts[year] || 0) + 1;
+      }
+    });
+
+    return Object.entries(yearCounts)
+      .map(([year, count]) => ({ year: parseInt(year), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+  }
+
+  private extractGenreTerms(topTracks: SpotifyTrack[]): string[] {
+    // Extract potential genre terms from track names and artists
+    const genreTerms: string[] = [];
+    
+    for (const track of topTracks.slice(0, 10)) {
+      const trackName = track.name.toLowerCase();
+      const artistName = track.artists[0]?.name.toLowerCase() || "";
+      
+      // Common genre keywords
+      const genreKeywords = [
+        'pop', 'rock', 'hip hop', 'rap', 'electronic', 'edm', 'indie', 'alternative',
+        'country', 'jazz', 'blues', 'classical', 'folk', 'reggae', 'funk', 'soul',
+        'r&b', 'rnb', 'trap', 'house', 'techno', 'ambient', 'acoustic', 'punk'
+      ];
+      
+      for (const keyword of genreKeywords) {
+        if (trackName.includes(keyword) || artistName.includes(keyword)) {
+          if (!genreTerms.includes(keyword)) {
+            genreTerms.push(keyword);
+          }
+        }
+      }
+    }
+    
+    return genreTerms.slice(0, 5); // Return top 5 genre terms
   }
 }
 

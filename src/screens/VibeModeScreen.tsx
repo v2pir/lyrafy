@@ -96,10 +96,22 @@ export default function VibeModeScreen() {
         setIsLoading(true);
         console.log("🎵 Loading Spotify tracks for vibe:", vibeMode?.name);
         
-        // Get ONLY vibe-based recommendations (no user top tracks mixed in)
-        const spotifyTracks = await spotifyService.getRecommendationsForVibeMode(vibeMode, []);
+        // Check if this is an AI-generated vibe (has ai-vibe prefix)
+        const isAIGeneratedVibe = vibeMode?.id?.startsWith('ai-vibe-');
         
-        console.log(`🎵 Found ${spotifyTracks.length} Spotify tracks for ${vibeMode?.name}`);
+        let spotifyTracks: SpotifyTrack[];
+        
+        if (isAIGeneratedVibe) {
+          // For AI-generated vibes, use the tracks from the music store
+          // (they were already set by the HomeScreen)
+          const storeTracks = useMusicStore.getState().feedTracks;
+          spotifyTracks = storeTracks || [];
+          console.log(`🎵 Using ${spotifyTracks.length} pre-loaded AI tracks for ${vibeMode?.name}`);
+        } else {
+          // For regular vibes, search for tracks
+          spotifyTracks = await spotifyService.getRecommendationsForVibeMode(vibeMode, []);
+          console.log(`🎵 Found ${spotifyTracks.length} Spotify tracks for ${vibeMode?.name}`);
+        }
         
         // Show all Spotify tracks immediately (without previews initially)
         setLocalTracks(spotifyTracks);

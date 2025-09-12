@@ -3,16 +3,22 @@ import { View, Text, Pressable, ScrollView, Alert, TextInput, Modal } from "reac
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../navigation/AppNavigator";
 import { useMusicStore } from "../state/musicStore";
 import { useAuthStore } from "../state/authStore";
 import { spotifyService } from "../services/spotifyService";
 import { SpotifyPlaylist } from "../types/music";
+
+type PlaylistsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PlaylistsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
+  const navigation = useNavigation<PlaylistsScreenNavigationProp>();
   const { userPlaylists, addPlaylist } = useMusicStore();
   const { isAuthenticated } = useAuthStore();
 
@@ -21,7 +27,13 @@ export default function PlaylistsScreen() {
     
     try {
       const playlists = await spotifyService.getUserPlaylists();
-      playlists.forEach(playlist => addPlaylist(playlist));
+      if (playlists && Array.isArray(playlists)) {
+        playlists.forEach(playlist => {
+          if (playlist) {
+            addPlaylist(playlist);
+          }
+        });
+      }
     } catch (error) {
       console.error("Error loading playlists:", error);
     }
@@ -56,31 +68,49 @@ export default function PlaylistsScreen() {
     }
   };
 
-  const renderPlaylistItem = (playlist: SpotifyPlaylist) => (
-    <Pressable
-      key={playlist.id}
-      className="bg-gray-900 p-4 rounded-xl mb-3 flex-row items-center"
-    >
-      <View className="w-12 h-12 bg-gray-800 rounded-lg mr-4 items-center justify-center">
-        {playlist.images[0]?.url ? (
-          <View className="w-full h-full bg-gray-700 rounded-lg" />
-        ) : (
-          <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
-        )}
-      </View>
-      
-      <View className="flex-1">
-        <Text className="text-white text-base font-semibold mb-1" numberOfLines={1}>
-          {playlist.name}
-        </Text>
-        <Text className="text-gray-400 text-sm">
-          {playlist.tracks.total} tracks
-        </Text>
-      </View>
-      
-      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-    </Pressable>
-  );
+  const handlePlaylistPress = (playlist: SpotifyPlaylist) => {
+    if (!playlist) {
+      console.error("Playlist is null or undefined");
+      return;
+    }
+    
+    console.log("Opening playlist:", playlist.name);
+    navigation.navigate("PlaylistDetail", { playlist });
+  };
+
+  const renderPlaylistItem = (playlist: SpotifyPlaylist) => {
+    if (!playlist) {
+      console.error("Playlist is null or undefined in renderPlaylistItem");
+      return null;
+    }
+    
+    return (
+      <Pressable
+        key={playlist.id}
+        onPress={() => handlePlaylistPress(playlist)}
+        className="bg-gray-900 p-4 rounded-xl mb-3 flex-row items-center"
+      >
+        <View className="w-12 h-12 bg-gray-800 rounded-lg mr-4 items-center justify-center">
+          {playlist.images?.[0]?.url ? (
+            <View className="w-full h-full bg-gray-700 rounded-lg" />
+          ) : (
+            <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
+          )}
+        </View>
+        
+        <View className="flex-1">
+          <Text className="text-white text-base font-semibold mb-1" numberOfLines={1}>
+            {playlist.name || "Untitled Playlist"}
+          </Text>
+          <Text className="text-gray-400 text-sm">
+            {playlist.tracks?.total || 0} tracks
+          </Text>
+        </View>
+        
+        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+      </Pressable>
+    );
+  };
 
   if (!isAuthenticated) {
     return (
