@@ -16,6 +16,7 @@ module.exports = function (api) {
           verbose: false,        // optional: logs dotenv issues during build
         },
       ],
+      'react-native-worklets/plugin',
     ],
   };
 };

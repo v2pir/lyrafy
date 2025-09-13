@@ -49,7 +49,9 @@ class SpotifyService {
   /** --------------------------
    * GENERIC API CALL
    * ------------------------- */
-  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async makeRequest<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
+    const MAX_RETRIES = 1; // Prevent infinite loops
+    
     let accessToken = await this.getAccessToken();
     if (!accessToken) throw new Error("No access token available");
 
@@ -64,11 +66,16 @@ class SpotifyService {
       },
     });
 
-    // Handle expired token
-    if (response.status === 401) {
+    // Handle expired token with retry limit
+    if (response.status === 401 && retryCount < MAX_RETRIES) {
+      console.log("🔄 Token expired, attempting refresh...");
       const refreshed = await this.refreshAccessToken();
-      if (refreshed) return this.makeRequest<T>(endpoint, options);
+      if (refreshed) {
+        return this.makeRequest<T>(endpoint, options, retryCount + 1);
+      }
       throw new Error("Authentication failed");
+    } else if (response.status === 401) {
+      throw new Error("Authentication failed after retry");
     }
 
     // Handle other API errors

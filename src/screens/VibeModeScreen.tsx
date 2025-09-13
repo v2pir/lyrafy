@@ -4,10 +4,9 @@ import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState } from "
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
-import { PanGestureHandler, TapGestureHandler, PanGestureHandlerGestureEvent, TapGestureHandlerGestureEvent } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   withSpring,
   withTiming,
@@ -617,33 +616,23 @@ export default function VibeModeScreen() {
     });
   };
 
-  const doubleTapHandler = useAnimatedGestureHandler<TapGestureHandlerGestureEvent>({
-    onEnd: () => {
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
       console.log("👆 Double tap detected - toggling like");
       runOnJS(handleLike)();
-    },
-  });
+    });
 
-  const swipeHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent, { startX: number; startY: number }>({
-    onStart: (_, ctx) => {
-      try {
-        console.log("🔄 Gesture started");
-      ctx.startX = translateX.value;
-      ctx.startY = translateY.value;
-      } catch (error) {
-        console.error("❌ Error in gesture onStart:", error);
-      }
-    },
-    onActive: (event, ctx) => {
-      try {
-      translateX.value = ctx.startX + event.translationX;
-      translateY.value = ctx.startY + event.translationY;
-      rotation.value = (translateX.value / SCREEN_WIDTH) * 20;
-      } catch (error) {
-        console.error("❌ Error in gesture onActive:", error);
-      }
-    },
-    onEnd: () => {
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      console.log("🔄 Gesture started");
+    })
+    .onUpdate((event) => {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+      rotation.value = (event.translationX / SCREEN_WIDTH) * 20;
+    })
+    .onEnd(() => {
       try {
         console.log("🔄 Gesture ended, translateX:", translateX.value, "translateY:", translateY.value);
         
@@ -662,29 +651,23 @@ export default function VibeModeScreen() {
         
         if (shouldExit) {
           console.log("🚪 Swiping down - exit vibe mode");
-          // Just set a flag and animate - handle everything in useEffect
           runOnJS(setPendingSwipe)("exit");
-          // Animate card down and out
           translateY.value = withTiming(SCREEN_HEIGHT * 1.5, { duration: SWIPE_OUT_DURATION });
           translateX.value = withTiming(0, { duration: SWIPE_OUT_DURATION });
           rotation.value = withTiming(0, { duration: SWIPE_OUT_DURATION });
         } else if (shouldSwipeRight) {
           console.log("🔄 Swiping right - like");
-          // Use simpler animation
           translateX.value = withTiming(SCREEN_WIDTH * 1.5, { duration: SWIPE_OUT_DURATION });
           translateY.value = withTiming(50, { duration: SWIPE_OUT_DURATION });
           rotation.value = withTiming(30, { duration: SWIPE_OUT_DURATION });
-          // Set pending swipe to trigger in useEffect
           runOnJS(setPendingSwipe)("right");
         } else if (shouldSwipeLeft) {
           console.log("🔄 Swiping left - dislike");
-          // Use simpler animation
           translateX.value = withTiming(-SCREEN_WIDTH * 1.5, { duration: SWIPE_OUT_DURATION });
           translateY.value = withTiming(50, { duration: SWIPE_OUT_DURATION });
           rotation.value = withTiming(-30, { duration: SWIPE_OUT_DURATION });
-          // Set pending swipe to trigger in useEffect
           runOnJS(setPendingSwipe)("left");
-      } else {
+        } else {
           console.log("🔄 Returning to center");
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
@@ -692,13 +675,18 @@ export default function VibeModeScreen() {
         }
       } catch (error) {
         console.error("❌ Error in gesture onEnd:", error);
-        // Fallback: just reset to center
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-        rotation.value = withSpring(0);
+        // Reset to center position safely
+        try {
+          translateX.value = withSpring(0);
+          translateY.value = withSpring(0);
+          rotation.value = withSpring(0);
+        } catch (resetError) {
+          console.error("❌ Error resetting gesture values:", resetError);
+        }
       }
-    },
-  });
+    });
+
+  const composedGesture = Gesture.Simultaneous(doubleTapGesture, panGesture);
 
   const handleSwipe = (direction: "left" | "right") => {
     console.log("🔄 handleSwipe called with direction:", direction);
@@ -826,18 +814,9 @@ export default function VibeModeScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      <TapGestureHandler
-        numberOfTaps={2}
-        onGestureEvent={doubleTapHandler}
-      >
+      <GestureDetector gesture={composedGesture}>
         <Animated.View style={[styles.fullScreen, containerStyle]}>
-          <PanGestureHandler 
-            onGestureEvent={swipeHandler}
-            onHandlerStateChange={(event) => {
-              console.log("🔄 Gesture state change:", event.nativeEvent.state);
-            }}
-          >
-            <Animated.View style={[styles.fullScreen, animatedStyle]}>
+          <Animated.View style={[styles.fullScreen, animatedStyle]}>
               {/* Futuristic Background */}
               <LinearGradient
                 colors={['#000000', '#0a0a0a', '#1a1a1a']}
@@ -916,9 +895,8 @@ export default function VibeModeScreen() {
                   </Animated.View>
                 </LinearGradient>
           </Animated.View>
-        </PanGestureHandler>
         </Animated.View>
-      </TapGestureHandler>
+      </GestureDetector>
       </View>
   );
 }
