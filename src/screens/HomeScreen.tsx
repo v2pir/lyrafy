@@ -1,16 +1,30 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, Alert, ActivityIndicator, Dimensions, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withRepeat, 
+  withTiming,
+  interpolate,
+  Easing
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useMusicStore } from "../state/musicStore";
 import { useAuthStore } from "../state/authStore";
 import { authService } from "../services/authService";
 import { spotifyService } from "../services/spotifyService";
 import { aiMusicService, MusicTasteProfile } from "../services/aiMusicService";
+import { musicDNAService, MusicDNAProfile } from "../services/musicDNAService";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,6 +33,55 @@ export default function HomeScreen() {
   const { currentVibeMode, setVibeMode, setFeedTracks } = useMusicStore();
   const { isAuthenticated } = useAuthStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [musicDNAProfile, setMusicDNAProfile] = useState<MusicDNAProfile | null>(null);
+  const [isGeneratingDNA, setIsGeneratingDNA] = useState(false);
+
+  // Animation values
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.8);
+  const rotateAnim = useSharedValue(0);
+  const pulseAnim = useSharedValue(1);
+  const slideAnim = useSharedValue(50);
+
+  useEffect(() => {
+    // Entrance animations
+    fadeAnim.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
+    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 150 });
+    slideAnim.value = withSpring(0, { damping: 15, stiffness: 150 });
+    
+    // Continuous subtle animations
+    rotateAnim.value = withRepeat(
+      withTiming(360, { duration: 20000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    
+    pulseAnim.value = withRepeat(
+      withTiming(1.05, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    );
+  }, []);
+
+  // Animated styles
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [
+      { scale: scaleAnim.value },
+      { translateY: slideAnim.value }
+    ]
+  }));
+
+  const logoStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${rotateAnim.value}deg` },
+      { scale: pulseAnim.value }
+    ]
+  }));
+
+  const buttonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseAnim.value }]
+  }));
 
   const handleVibeMode = () => {
     navigation.navigate("GenrePreferences");
@@ -109,135 +172,435 @@ export default function HomeScreen() {
     }
   };
 
+  const handleGenerateMusicDNA = async () => {
+    if (!isAuthenticated) {
+      Alert.alert("Authentication Required", "Please connect to Spotify first");
+      return;
+    }
+
+    setIsGeneratingDNA(true);
+    
+    try {
+      console.log("🧬 Generating Music DNA profile...");
+      const profile = await musicDNAService.generateMusicDNAProfile("week");
+      setMusicDNAProfile(profile);
+    } catch (error) {
+      console.error("❌ Error generating Music DNA:", error);
+      Alert.alert(
+        "Generation Failed", 
+        "Sorry, we couldn't generate your Music DNA profile. Please try again."
+      );
+    } finally {
+      setIsGeneratingDNA(false);
+    }
+  };
+
+  const navigateToMusicDNA = () => {
+    navigation.navigate("MusicDNA");
+  };
+
   if (!isAuthenticated) {
     return (
-      <SafeAreaView className="flex-1 bg-black">
+      <View style={styles.container}>
         <StatusBar style="light" />
-        <View className="flex-1 justify-center items-center px-6">
-          <Ionicons name="musical-notes-outline" size={64} color="#4B5563" />
-          <Text className="text-xl text-gray-300 text-center mt-4 mb-2">
-            Connect your music service
+        <LinearGradient
+          colors={['#000000', '#0a0a0a', '#1a1a1a']}
+          style={styles.gradientBackground}
+        >
+          <Animated.View style={[styles.authContainer, containerStyle]}>
+            {/* Animated Logo */}
+            <Animated.View style={[styles.logoContainer, logoStyle]}>
+              <LinearGradient
+                colors={['#8B5CF6', '#EC4899', '#06B6D4']}
+                style={styles.logoGradient}
+              >
+                <Ionicons name="musical-notes" size={40} color="#FFFFFF" />
+              </LinearGradient>
+            </Animated.View>
+
+            <Text style={styles.appTitle}>Lyrafy</Text>
+            <Text style={styles.appSubtitle}>Your AI Music Companion</Text>
+            
+            <View style={styles.authCard}>
+              <Text style={styles.authTitle}>Connect Your Music</Text>
+              <Text style={styles.authDescription}>
+                Sign in to Spotify to unlock personalized music discovery powered by AI
           </Text>
-          <Text className="text-base text-gray-400 text-center mb-8">
-            Sign in to Spotify to load your personalized tracks
-          </Text>
+              
+              <Animated.View style={buttonStyle}>
           <Pressable
             onPress={async () => {
               const success = await authService.authenticateWithSpotify();
-              if (!success) {
-                Alert.alert("Error", "Spotify login failed. Please try again.");
-              }
-            }}
-            className="bg-green-500 px-8 py-4 rounded-2xl"
-          >
-            <Text className="text-black text-lg font-semibold">Connect Spotify</Text>
+                    if (!success) {
+                      Alert.alert("Error", "Spotify login failed. Please try again.");
+                    }
+                  }}
+                  style={styles.connectButton}
+                >
+                  <LinearGradient
+                    colors={['#1DB954', '#1ed760']}
+                    style={styles.buttonGradient}
+                  >
+                    <Ionicons name="musical-notes" size={24} color="#FFFFFF" />
+                    <Text style={styles.buttonText}>Connect Spotify</Text>
+                  </LinearGradient>
           </Pressable>
+              </Animated.View>
         </View>
-      </SafeAreaView>
+          </Animated.View>
+        </LinearGradient>
+        </View>
     );
   }
 
   // No loading state needed anymore
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
+    <View style={styles.container}>
       <StatusBar style="light" />
-      
-      <View className="flex-1 px-6 py-8">
-        {/* Header */}
-        <View className="items-center mb-12">
-          <Ionicons name="musical-notes" size={64} color="#1DB954" />
-          <Text className="text-4xl font-bold text-white text-center mt-4 mb-2">
-            Lyrafy
-          </Text>
-          <Text className="text-gray-400 text-center text-lg">
-            Discover your perfect music vibe
-          </Text>
-          <Text className="text-gray-500 text-center text-sm mt-2">
-            AI analyzes your top tracks to find similar NEW music you'll love
-          </Text>
-        </View>
-
-        {/* Main Action Buttons */}
-        <View className="flex-1 justify-center space-y-6">
-          {/* Vibe from Taste Button */}
-          <Pressable
-            onPress={handleVibeFromTaste}
-            disabled={isAnalyzing}
-            className={`px-8 py-6 rounded-2xl flex-row items-center justify-center ${
-              isAnalyzing ? "bg-gray-700" : "bg-gradient-to-r from-purple-500 to-pink-500"
-            }`}
-            style={{
-              backgroundColor: isAnalyzing ? "#374151" : "#8B5CF6",
-            }}
-          >
-            {isAnalyzing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Ionicons name="bulb" size={28} color="#FFFFFF" />
-            )}
-            <Text className="text-white text-xl font-bold ml-4">
-              {isAnalyzing ? "Analyzing Your Taste..." : "Vibe from Taste"}
-            </Text>
-            {!isAnalyzing && (
-              <Ionicons name="chevron-forward" size={24} color="#FFFFFF" className="ml-2" />
-            )}
-          </Pressable>
-
-          {/* Choose Vibe Button */}
-          <Pressable
-            onPress={handleVibeMode}
-            className="bg-green-500 px-8 py-6 rounded-2xl flex-row items-center justify-center"
-          >
-            <Ionicons name="musical-notes" size={28} color="#000000" />
-            <Text className="text-black text-xl font-bold ml-4">
-              Choose Your Vibe
-            </Text>
-            <Ionicons name="chevron-forward" size={24} color="#000000" className="ml-2" />
-          </Pressable>
-
-          {/* Create Playlist Button */}
-          <Pressable
-            onPress={handleCreatePlaylist}
-            className="bg-gray-800 px-8 py-6 rounded-2xl flex-row items-center justify-center border border-gray-600"
-          >
-            <Ionicons name="add-circle" size={28} color="#FFFFFF" />
-            <Text className="text-white text-xl font-bold ml-4">
-              Create Playlist
-            </Text>
-            <Ionicons name="chevron-forward" size={24} color="#FFFFFF" className="ml-2" />
-          </Pressable>
-
-          {/* Quick Actions */}
-          <View className="mt-8">
-            <Text className="text-gray-400 text-center mb-4">Quick Actions</Text>
-            <View className="flex-row justify-center space-x-4">
-              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
-                <Ionicons name="heart" size={24} color="#FFFFFF" />
-                <Text className="text-white text-sm mt-2">Liked Songs</Text>
-              </Pressable>
-              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
-                <Ionicons name="time" size={24} color="#FFFFFF" />
-                <Text className="text-white text-sm mt-2">Recently Played</Text>
-              </Pressable>
-              <Pressable className="bg-gray-800 px-6 py-4 rounded-xl items-center">
-                <Ionicons name="trending-up" size={24} color="#FFFFFF" />
-                <Text className="text-white text-sm mt-2">Trending</Text>
-              </Pressable>
+      <LinearGradient
+        colors={['#000000', '#0a0a0a', '#1a1a1a']}
+        style={styles.gradientBackground}
+      >
+        <Animated.View style={[styles.mainContainer, containerStyle]}>
+          {/* Futuristic Header */}
+          <View style={styles.header}>
+            <Animated.View style={[styles.logoContainer, logoStyle]}>
+              <LinearGradient
+                colors={['#8B5CF6', '#EC4899', '#06B6D4']}
+                style={styles.logoGradient}
+              >
+                <Ionicons name="musical-notes" size={32} color="#FFFFFF" />
+              </LinearGradient>
+            </Animated.View>
+            
+            <Text style={styles.appTitle}>Lyrafy</Text>
+            <Text style={styles.appSubtitle}>AI-Powered Music Discovery</Text>
+            
+            {/* Floating particles effect */}
+            <View style={styles.particlesContainer}>
+              {[...Array(6)].map((_, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.particle,
+                    {
+                      left: Math.random() * SCREEN_WIDTH,
+                    }
+                  ]}
+                />
+              ))}
             </View>
           </View>
-        </View>
 
-        {/* Current Vibe Display */}
-        {currentVibeMode && (
-          <View className="bg-gray-900 px-4 py-3 rounded-xl mb-4">
-            <Text className="text-gray-400 text-center text-sm mb-1">Current Vibe</Text>
-            <Text className="text-white text-center text-lg font-semibold">
-              {currentVibeMode.emoji} {currentVibeMode.name}
-            </Text>
+          {/* Main Action Cards */}
+          <View style={styles.actionsContainer}>
+            {/* AI Vibe Card */}
+            <Animated.View style={[styles.actionCard, buttonStyle]}>
+              <BlurView intensity={20} style={styles.cardBlur}>
+                <LinearGradient
+                  colors={['rgba(139, 92, 246, 0.3)', 'rgba(236, 72, 153, 0.3)']}
+                  style={styles.cardGradient}
+                >
+      <Pressable
+                    onPress={handleVibeFromTaste}
+                    disabled={isAnalyzing}
+                    style={styles.cardPressable}
+                  >
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardIcon}>
+                        {isAnalyzing ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Ionicons name="bulb" size={28} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <View style={styles.cardText}>
+                        <Text style={styles.cardTitle}>
+                          {isAnalyzing ? "Analyzing..." : "Vibe from Taste"}
+                        </Text>
+                        <Text style={styles.cardSubtitle}>
+                          AI learns your music taste
+                        </Text>
+                      </View>
+                      {!isAnalyzing && (
+                        <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                      )}
+                    </View>
+                  </Pressable>
+                </LinearGradient>
+              </BlurView>
+            </Animated.View>
+
+            {/* Music DNA Card */}
+            <Animated.View style={[styles.actionCard, buttonStyle]}>
+              <BlurView intensity={20} style={styles.cardBlur}>
+                <LinearGradient
+                  colors={['rgba(255, 107, 107, 0.3)', 'rgba(255, 142, 142, 0.3)']}
+                  style={styles.cardGradient}
+                >
+                  <Pressable onPress={navigateToMusicDNA} style={styles.cardPressable}>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardIcon}>
+                        <Ionicons name="finger-print" size={28} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.cardText}>
+                        <Text style={styles.cardTitle}>Music DNA</Text>
+                        <Text style={styles.cardSubtitle}>
+                          Your musical fingerprint
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                    </View>
+                  </Pressable>
+                </LinearGradient>
+              </BlurView>
+            </Animated.View>
+
+            {/* Choose Vibe Card */}
+            <Animated.View style={[styles.actionCard, buttonStyle]}>
+              <BlurView intensity={20} style={styles.cardBlur}>
+                <LinearGradient
+                  colors={['rgba(29, 185, 84, 0.3)', 'rgba(30, 215, 96, 0.3)']}
+                  style={styles.cardGradient}
+                >
+                  <Pressable onPress={handleVibeMode} style={styles.cardPressable}>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardIcon}>
+                        <Ionicons name="musical-notes" size={28} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.cardText}>
+                        <Text style={styles.cardTitle}>Choose Vibe</Text>
+                        <Text style={styles.cardSubtitle}>Select your mood</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                    </View>
+                  </Pressable>
+                </LinearGradient>
+              </BlurView>
+            </Animated.View>
+
+            {/* Create Playlist Card */}
+            <Animated.View style={[styles.actionCard, buttonStyle]}>
+              <BlurView intensity={20} style={styles.cardBlur}>
+                <LinearGradient
+                  colors={['rgba(6, 182, 212, 0.3)', 'rgba(14, 165, 233, 0.3)']}
+                  style={styles.cardGradient}
+                >
+                  <Pressable onPress={handleCreatePlaylist} style={styles.cardPressable}>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardIcon}>
+                        <Ionicons name="add-circle" size={28} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.cardText}>
+                        <Text style={styles.cardTitle}>Create Playlist</Text>
+                        <Text style={styles.cardSubtitle}>Build your collection</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                    </View>
+      </Pressable>
+                </LinearGradient>
+              </BlurView>
+            </Animated.View>
           </View>
-        )}
-      </View>
-    </SafeAreaView>
+
+          {/* Current Vibe Display */}
+          {currentVibeMode && (
+            <View style={styles.currentVibeCard}>
+              <BlurView intensity={10} style={styles.vibeBlur}>
+                <Text style={styles.currentVibeLabel}>Current Vibe</Text>
+                <Text style={styles.currentVibeText}>
+                  {currentVibeMode.emoji} {currentVibeMode.name}
+                </Text>
+              </BlurView>
+            </View>
+          )}
+        </Animated.View>
+      </LinearGradient>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  gradientBackground: {
+    flex: 1,
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  mainContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appTitle: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  appSubtitle: {
+    fontSize: 16,
+    color: '#A0A0A0',
+    textAlign: 'center',
+    marginBottom: 40,
+    fontWeight: '300',
+  },
+  authCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 28,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  authDescription: {
+    fontSize: 16,
+    color: '#A0A0A0',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  connectButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 60,
+    position: 'relative',
+  },
+  particlesContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  particle: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    backgroundColor: 'rgba(139, 92, 246, 0.6)',
+    borderRadius: 2,
+    top: Math.random() * 200,
+  },
+  actionsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 8,
+  },
+  actionCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 4,
+  },
+  cardBlur: {
+    borderRadius: 20,
+  },
+  cardGradient: {
+    padding: 20,
+  },
+  cardPressable: {
+    borderRadius: 20,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  cardText: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#A0A0A0',
+    fontWeight: '400',
+  },
+  currentVibeCard: {
+    marginTop: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  vibeBlur: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  currentVibeLabel: {
+    fontSize: 12,
+    color: '#A0A0A0',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  currentVibeText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});

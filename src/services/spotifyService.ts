@@ -168,6 +168,43 @@ class SpotifyService {
     }
   }
 
+  /**
+   * Get user's recently played tracks
+   */
+  async getRecentlyPlayedTracks(limit: number = 50): Promise<SpotifyTrack[]> {
+    try {
+      console.log(`🎵 Fetching recently played tracks (limit: ${limit})`);
+      
+      const token = await this.getAccessToken();
+      if (!token) {
+        throw new Error("No access token available");
+      }
+
+      const response = await this.makeRequest<{ items: any[] }>(
+        `${SPOTIFY_BASE_URL}/me/player/recently-played?limit=${limit}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response?.items) {
+        console.warn("⚠️ No recently played tracks found in response");
+        return [];
+      }
+
+      // Extract tracks from the recently played items
+      const tracks = response.items.map((item: any) => item.track).filter(Boolean);
+      console.log(`✅ Found ${tracks.length} recently played tracks`);
+      return tracks;
+    } catch (error) {
+      console.error("❌ Error fetching recently played tracks:", error);
+      throw error;
+    }
+  }
+
   async getUserTopArtists(
     timeRange: "short_term" | "medium_term" | "long_term" = "medium_term"
   ) {

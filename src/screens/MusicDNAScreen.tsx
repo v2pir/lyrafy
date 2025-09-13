@@ -1,0 +1,629 @@
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, StyleSheet, Dimensions, Alert, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming,
+  withDelay,
+  interpolate,
+  Easing
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
+import * as Linking from "expo-linking";
+import ViewShot from "react-native-view-shot";
+import Share from "react-native-share";
+import { musicDNAService, MusicDNAProfile } from "../services/musicDNAService";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+/**
+ * INSTAGRAM STORIES SHARING SETUP GUIDE:
+ * 
+ * To enable Instagram Stories sharing, you need to:
+ * 
+ * 1. Create a Facebook App:
+ *    - Go to https://developers.facebook.com/apps/
+ *    - Click "Create App" and select "Consumer" or "Business"
+ *    - Fill in your app details
+ * 
+ * 2. Get your App ID:
+ *    - In your Facebook App dashboard, find "App ID" in the App Settings
+ *    - Copy this ID
+ * 
+ * 3. Update the code:
+ *    - Replace "123456789" in the shareOptions with your real App ID
+ *    - Example: appId: "1234567890123456"
+ * 
+ * 4. Configure Instagram:
+ *    - In your Facebook App, go to "Products" → "Instagram Basic Display"
+ *    - Add Instagram Basic Display product
+ *    - Configure OAuth redirect URIs if needed
+ * 
+ * 5. Test the integration:
+ *    - Make sure Instagram app is installed on test device
+ *    - The sharing should now open Instagram Stories directly
+ */
+
+export default function MusicDNAScreen() {
+  const [profile, setProfile] = useState<MusicDNAProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [timeRange, setTimeRange] = useState<"day" | "week">("week");
+  const viewShotRef = React.useRef<ViewShot>(null);
+
+  // Helper function to check if Instagram is installed
+  const checkInstagramInstalled = async (): Promise<boolean> => {
+    try {
+      return await Linking.canOpenURL("instagram://");
+    } catch (error) {
+      console.error("Error checking Instagram installation:", error);
+      return false;
+    }
+  };
+
+  // Animation values
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.9);
+  const slideAnim = useSharedValue(50);
+  const cardScale = useSharedValue(0.8);
+  const cardOpacity = useSharedValue(0);
+
+  // Entrance animations
+  useEffect(() => {
+    fadeAnim.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
+    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 150 });
+    slideAnim.value = withSpring(0, { damping: 15, stiffness: 150 });
+    
+    // Staggered card animation
+    cardScale.value = withDelay(400, withSpring(1, { damping: 12, stiffness: 100 }));
+    cardOpacity.value = withDelay(400, withTiming(1, { duration: 600 }));
+  }, []);
+
+  // Animated styles
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [
+      { scale: scaleAnim.value },
+      { translateY: slideAnim.value }
+    ]
+  }));
+
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ scale: cardScale.value }]
+  }));
+
+  const generateProfile = async () => {
+    setIsLoading(true);
+    try {
+      const newProfile = await musicDNAService.generateMusicDNAProfile(timeRange);
+      setProfile(newProfile);
+    } catch (error) {
+      console.error("Error generating profile:", error);
+      Alert.alert("Error", "Failed to generate Music DNA profile. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const shareToInstagram = async () => {
+    if (!profile || !viewShotRef.current) return;
+
+    try {
+      // Capture the Music DNA card as an image
+      const captureMethod = viewShotRef.current?.capture;
+      if (!captureMethod) throw new Error("ViewShot not ready");
+      const imageUri = await captureMethod();
+      if (!imageUri) throw new Error("Failed to capture image");
+      
+      // Check if Instagram is installed first
+      const isInstagramInstalled = await checkInstagramInstalled();
+      
+      if (!isInstagramInstalled) {
+        Alert.alert(
+          "Instagram Not Installed", 
+          "Instagram app is not installed on your device. Please install Instagram to share to Stories.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+      
+      // Try Instagram Stories with proper configuration
+      try {
+        const shareOptions = {
+          title: "My Music DNA",
+          message: `🧬 My Music DNA: ${profile.vibe} ${profile.emoji}\n\n${profile.description}\n\nGenerated by Lyrafy 🎵`,
+          url: imageUri,
+          social: Share.Social.INSTAGRAM_STORIES as any,
+          // IMPORTANT: For production, you need to get a Facebook App ID from Facebook Developer Console
+          // Go to https://developers.facebook.com/apps/ and create an app
+          // Then replace this placeholder with your real App ID
+          appId: "1040257651373731", // Placeholder - replace with real Facebook App ID
+          instagramStories: {
+            backgroundImage: imageUri,
+            // Use the Music DNA color as background gradient
+            backgroundTopColor: profile.color,
+            backgroundBottomColor: profile.color,
+            // Avoid stickerImage to prevent iOS issues with video backgrounds
+            // The backgroundImage will be the main visual element
+          },
+        };
+
+        await Share.shareSingle(shareOptions);
+        
+        Alert.alert(
+          "Instagram Stories", 
+          "Opening Instagram Stories with your Music DNA card!",
+          [{ text: "OK" }]
+        );
+      } catch (instagramError) {
+        console.log("Instagram Stories failed, trying general share:", instagramError);
+        
+        // Fallback to general share which will include Instagram in the share sheet
+        const generalShareOptions = {
+          title: "My Music DNA",
+          message: `🧬 My Music DNA: ${profile.vibe} ${profile.emoji}\n\n${profile.description}\n\nGenerated by Lyrafy 🎵`,
+          url: imageUri,
+        };
+
+        await Share.open(generalShareOptions);
+        
+        Alert.alert(
+          "Share Options", 
+          "Choose Instagram from the share options to post to Stories!",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      console.error("Error sharing to Instagram:", error);
+      // Final fallback to native share sheet with image
+      try {
+        const captureMethod = viewShotRef.current?.capture;
+        if (captureMethod) {
+          const imageUri = await captureMethod();
+          await shareImageViaNativeSheet(imageUri);
+        } else {
+          const shareText = `🧬 My Music DNA: ${profile.vibe} ${profile.emoji}\n\n${profile.description}\n\nGenerated by Lyrafy 🎵`;
+          await shareViaNativeSheet(shareText);
+        }
+      } catch (fallbackError) {
+        console.error("Fallback sharing failed:", fallbackError);
+        Alert.alert("Error", "Failed to share. Please try again.");
+      }
+    }
+  };
+
+  const shareImageViaNativeSheet = async (imageUri: string) => {
+    try {
+      // Use react-native-share for image sharing as fallback
+      await Share.open({
+        title: "My Music DNA",
+        url: imageUri,
+      });
+    } catch (error) {
+      console.error("Error sharing image:", error);
+      Alert.alert("Error", "Failed to share image. Please try again.");
+    }
+  };
+
+  const shareToTikTok = async () => {
+    if (!profile || !viewShotRef.current) return;
+
+    try {
+      // Capture the Music DNA card as an image
+      const captureMethod = viewShotRef.current?.capture;
+      if (!captureMethod) throw new Error("ViewShot not ready");
+      const imageUri = await captureMethod();
+      if (!imageUri) throw new Error("Failed to capture image");
+      
+      // Use react-native-share for general sharing (TikTok will be available in share sheet)
+      const shareOptions = {
+        title: "My Music DNA",
+        message: `🧬 My Music DNA: ${profile.vibe} ${profile.emoji}\n\n${profile.description}\n\nGenerated by Lyrafy 🎵`,
+        url: imageUri,
+      };
+
+      await Share.open(shareOptions);
+      
+      Alert.alert(
+        "TikTok", 
+        "Opening TikTok with your Music DNA card!",
+        [{ text: "OK" }]
+      );
+    } catch (error) {
+      console.error("Error sharing to TikTok:", error);
+      // Fallback to native share sheet with image
+      try {
+        const captureMethod = viewShotRef.current?.capture;
+        if (captureMethod) {
+          const imageUri = await captureMethod();
+          await shareImageViaNativeSheet(imageUri);
+        } else {
+          const shareText = `🧬 My Music DNA: ${profile.vibe} ${profile.emoji}\n\n${profile.description}\n\nGenerated by Lyrafy 🎵`;
+          await shareViaNativeSheet(shareText);
+        }
+      } catch (fallbackError) {
+        console.error("Fallback sharing failed:", fallbackError);
+        Alert.alert("Error", "Failed to share. Please try again.");
+      }
+    }
+  };
+
+  const shareViaNativeSheet = async (shareText: string) => {
+    try {
+      // Use react-native-share for text sharing as fallback
+      await Share.open({
+        title: "My Music DNA",
+        message: shareText,
+      });
+    } catch (error) {
+      console.error("Error in native share:", error);
+      Alert.alert("Error", "Failed to share. Please try again.");
+    }
+  };
+
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      <LinearGradient
+        colors={['#000000', '#0a0a0a', '#1a1a1a']}
+        style={styles.gradientBackground}
+      >
+        <Animated.View style={[styles.mainContainer, containerStyle]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <BlurView intensity={20} style={styles.headerBlur}>
+              <Text style={styles.headerTitle}>Music DNA</Text>
+              <Text style={styles.headerSubtitle}>Your musical fingerprint</Text>
+            </BlurView>
+          </View>
+
+          {/* Time Range Selector */}
+          <View style={styles.timeRangeContainer}>
+            <BlurView intensity={15} style={styles.timeRangeBlur}>
+              <Pressable
+                style={[styles.timeRangeButton, timeRange === "day" && styles.timeRangeButtonActive]}
+                onPress={() => setTimeRange("day")}
+              >
+                <Text style={[styles.timeRangeText, timeRange === "day" && styles.timeRangeTextActive]}>
+                  Today
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.timeRangeButton, timeRange === "week" && styles.timeRangeButtonActive]}
+                onPress={() => setTimeRange("week")}
+              >
+                <Text style={[styles.timeRangeText, timeRange === "week" && styles.timeRangeTextActive]}>
+                  This Week
+                </Text>
+              </Pressable>
+            </BlurView>
+          </View>
+
+          {/* Generate Button */}
+          <View style={styles.generateContainer}>
+            <Pressable
+              onPress={generateProfile}
+              disabled={isLoading}
+              style={styles.generateButton}
+            >
+              <LinearGradient
+                colors={isLoading ? ['#374151', '#4B5563'] : ['#8B5CF6', '#EC4899']}
+                style={styles.generateButtonGradient}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                )}
+                <Text style={styles.generateButtonText}>
+                  {isLoading ? "Analyzing..." : "Generate My DNA"}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+
+          {/* Music DNA Card */}
+          {profile && (
+            <ViewShot ref={viewShotRef} options={{ format: "png", quality: 0.9 }}>
+              <Animated.View style={[styles.cardContainer, cardStyle]}>
+                <BlurView intensity={20} style={styles.cardBlur}>
+                  <LinearGradient
+                    colors={[profile.color, `${profile.color}80`]}
+                    style={styles.cardGradient}
+                  >
+                  {/* Card Header */}
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardEmoji}>{profile.emoji}</Text>
+                    <View style={styles.cardHeaderText}>
+                      <Text style={styles.cardVibe}>{profile.vibe}</Text>
+                      <Text style={styles.cardDescription}>{profile.description}</Text>
+                    </View>
+                  </View>
+
+                  {/* Stats */}
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{profile.stats.totalTracks}</Text>
+                      <Text style={styles.statLabel}>Tracks</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{profile.stats.topGenre}</Text>
+                      <Text style={styles.statLabel}>Top Genre</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{profile.stats.topArtist}</Text>
+                      <Text style={styles.statLabel}>Top Artist</Text>
+                    </View>
+                  </View>
+
+                  {/* Mood & Energy */}
+                  <View style={styles.moodEnergyContainer}>
+                    <View style={styles.moodEnergyItem}>
+                      <Text style={styles.moodEnergyLabel}>Mood</Text>
+                      <Text style={styles.moodEnergyValue}>{profile.mood}</Text>
+                    </View>
+                    <View style={styles.moodEnergyItem}>
+                      <Text style={styles.moodEnergyLabel}>Energy</Text>
+                      <Text style={styles.moodEnergyValue}>{profile.energy}</Text>
+                    </View>
+                  </View>
+
+                  {/* Share Buttons */}
+                  <View style={styles.shareButtonsContainer}>
+                    <Pressable onPress={shareToInstagram} style={styles.shareButton}>
+                      <LinearGradient
+                        colors={['#E1306C', '#F56040', '#F77737']}
+                        style={styles.shareButtonGradient}
+                      >
+                        <Ionicons name="logo-instagram" size={20} color="#FFFFFF" />
+                        <Text style={styles.shareButtonText}>Instagram</Text>
+                      </LinearGradient>
+                    </Pressable>
+                    
+                    <Pressable onPress={shareToTikTok} style={styles.shareButton}>
+                      <LinearGradient
+                        colors={['#000000', '#FF0050', '#00F2EA']}
+                        style={styles.shareButtonGradient}
+                      >
+                        <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
+                        <Text style={styles.shareButtonText}>TikTok</Text>
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
+                </LinearGradient>
+              </BlurView>
+            </Animated.View>
+            </ViewShot>
+          )}
+
+          {/* Empty State */}
+          {!profile && !isLoading && (
+            <View style={styles.emptyState}>
+              <BlurView intensity={10} style={styles.emptyStateBlur}>
+                <Ionicons name="musical-notes-outline" size={64} color="#8B5CF6" />
+                <Text style={styles.emptyStateTitle}>Discover Your Music DNA</Text>
+                <Text style={styles.emptyStateSubtitle}>
+                  Generate a personalized music profile based on your listening habits
+                </Text>
+              </BlurView>
+            </View>
+          )}
+        </Animated.View>
+      </LinearGradient>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  gradientBackground: {
+    flex: 1,
+  },
+  mainContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+  },
+  header: {
+    marginBottom: 30,
+  },
+  headerBlur: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#A0A0A0',
+    marginTop: 4,
+  },
+  timeRangeContainer: {
+    marginBottom: 30,
+  },
+  timeRangeBlur: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 4,
+  },
+  timeRangeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  timeRangeButtonActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  timeRangeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A0A0A0',
+  },
+  timeRangeTextActive: {
+    color: '#FFFFFF',
+  },
+  generateContainer: {
+    marginBottom: 30,
+  },
+  generateButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  generateButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  generateButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 12,
+  },
+  cardContainer: {
+    marginBottom: 30,
+  },
+  cardBlur: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardGradient: {
+    padding: 24,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  cardEmoji: {
+    fontSize: 48,
+    marginRight: 16,
+  },
+  cardHeaderText: {
+    flex: 1,
+  },
+  cardVibe: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  moodEnergyContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  moodEnergyItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  moodEnergyLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 4,
+  },
+  moodEnergyValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  shareButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  shareButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  shareButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 6,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateBlur: {
+    alignItems: 'center',
+    padding: 40,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    color: '#A0A0A0',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});

@@ -14,6 +14,7 @@ import PlaylistsScreen from "../screens/PlaylistsScreen";
 import PlaylistDetailScreen from "../screens/PlaylistDetailScreen";
 import SearchScreen from "../screens/SearchScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import MusicDNAScreen from "../screens/MusicDNAScreen";
 import { VibeMode, SpotifyPlaylist } from "../types/music";
 
 export type RootStackParamList = {
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   VibeSelection: undefined;
   VibeMode: { vibeMode: VibeMode };
   PlaylistDetail: { playlist: SpotifyPlaylist };
+  MusicDNA: undefined;
 };
 
 export type MainTabParamList = {
@@ -111,6 +113,15 @@ export default function AppNavigator() {
           presentation: "modal",
           gestureEnabled: true,
           animation: "slide_from_right",
+        }}
+      />
+      <Stack.Screen 
+        name="MusicDNA" 
+        component={MusicDNAScreen}
+        options={{
+          presentation: "modal",
+          gestureEnabled: true,
+          animation: "slide_from_bottom",
         }}
       />
     </Stack.Navigator>

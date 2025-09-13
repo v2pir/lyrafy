@@ -12,8 +12,15 @@ import Animated, {
   withSpring,
   withTiming,
   withSequence,
+  withRepeat,
+  withDelay,
   runOnJS,
+  interpolate,
+  Easing,
 } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useMusicStore } from "../state/musicStore";
 import { VibeMode, SpotifyTrack } from "../types/music";
@@ -40,6 +47,16 @@ export default function VibeModeScreen() {
   const [isPreloading, setIsPreloading] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  
+  // Enhanced animation values
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.9);
+  const albumArtScale = useSharedValue(1);
+  const albumArtRotation = useSharedValue(0);
+  const pulseAnim = useSharedValue(1);
+  const slideAnim = useSharedValue(0);
+  const headerOpacity = useSharedValue(0);
+  const controlsOpacity = useSharedValue(0);
   
   // Audio cache to store pre-loaded sounds
   const audioCache = useRef<Map<string, Audio.Sound>>(new Map());
@@ -83,7 +100,7 @@ export default function VibeModeScreen() {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const rotation = useSharedValue(0);
-  
+
   // Like animation values
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
@@ -191,6 +208,31 @@ export default function VibeModeScreen() {
   };
 
 
+  // Entrance animations
+  useEffect(() => {
+    // Entrance animations
+    fadeAnim.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
+    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 150 });
+    slideAnim.value = withSpring(0, { damping: 15, stiffness: 150 });
+    
+    // Staggered animations for header and controls
+    headerOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
+    controlsOpacity.value = withDelay(400, withTiming(1, { duration: 600 }));
+    
+    // Continuous subtle animations - floating effect instead of spinning
+    albumArtRotation.value = withRepeat(
+      withTiming(5, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    );
+    
+    pulseAnim.value = withRepeat(
+      withTiming(1.05, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true
+    );
+  }, []);
+
   // Preload sounds when tracks are loaded
   useEffect(() => {
     if (feedTracks.length > 0) {
@@ -208,7 +250,7 @@ export default function VibeModeScreen() {
           playCurrentTrack();
         }, 500);
       } else {
-        playCurrentTrack();
+    playCurrentTrack();
       }
     }
   }, [currentIndex, feedTracks, isLoading]);
@@ -337,8 +379,8 @@ export default function VibeModeScreen() {
       if (!cachedSound) {
         console.log("⚠️ No cached sound, loading on-demand:", track.name);
         try {
-          const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri: track.preview_url },
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: track.preview_url },
             { shouldPlay: false, volume: 0.0 }
           );
           audioCache.current.set(track.id, newSound);
@@ -434,7 +476,7 @@ export default function VibeModeScreen() {
         await sound.stopAsync();
         await newSound.setPositionAsync(0);
         await newSound.setVolumeAsync(1.0);
-        await newSound.playAsync();
+      await newSound.playAsync();
         setSound(newSound);
         soundRef.current = newSound;
       } catch (fallbackErr) {
@@ -536,15 +578,27 @@ export default function VibeModeScreen() {
     heartOpacity.value = 0;
     heartTranslateY.value = 0;
     
-    // Animate heart appearing
+    // Instagram-style heart animation - starts big in center, then moves to corner
     heartScale.value = withSequence(
-      withTiming(1.2, { duration: 200 }),
-      withTiming(1, { duration: 100 })
+      withTiming(1.5, { duration: 150 }), // Start big
+      withTiming(0.8, { duration: 200 }), // Shrink slightly
+      withTiming(0.6, { duration: 300 })  // Shrink more as it moves
     );
-    heartOpacity.value = withTiming(1, { duration: 200 });
-    heartTranslateY.value = withTiming(-20, { duration: 200 });
+    heartOpacity.value = withSequence(
+      withTiming(1, { duration: 150 }),   // Fade in quickly
+      withTiming(0.8, { duration: 200 }), // Stay visible
+      withTiming(0, { duration: 300 })    // Fade out
+    );
+    heartTranslateY.value = withSequence(
+      withTiming(-30, { duration: 150 }), // Move up initially
+      withTiming(-60, { duration: 200 }), // Move up more
+      withTiming(-80, { duration: 300 })  // Move to corner
+    );
     
-    // Keep heart visible - don't auto-hide
+    // Hide after animation completes
+    setTimeout(() => {
+      setShowLikeAnimation(false);
+    }, 650);
   };
 
   const exitVibeMode = async () => {
@@ -574,17 +628,17 @@ export default function VibeModeScreen() {
     onStart: (_, ctx) => {
       try {
         console.log("🔄 Gesture started");
-        ctx.startX = translateX.value;
-        ctx.startY = translateY.value;
+      ctx.startX = translateX.value;
+      ctx.startY = translateY.value;
       } catch (error) {
         console.error("❌ Error in gesture onStart:", error);
       }
     },
     onActive: (event, ctx) => {
       try {
-        translateX.value = ctx.startX + event.translationX;
-        translateY.value = ctx.startY + event.translationY;
-        rotation.value = (translateX.value / SCREEN_WIDTH) * 20;
+      translateX.value = ctx.startX + event.translationX;
+      translateY.value = ctx.startY + event.translationY;
+      rotation.value = (translateX.value / SCREEN_WIDTH) * 20;
       } catch (error) {
         console.error("❌ Error in gesture onActive:", error);
       }
@@ -630,7 +684,7 @@ export default function VibeModeScreen() {
           rotation.value = withTiming(-30, { duration: SWIPE_OUT_DURATION });
           // Set pending swipe to trigger in useEffect
           runOnJS(setPendingSwipe)("left");
-        } else {
+      } else {
           console.log("🔄 Returning to center");
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
@@ -714,8 +768,36 @@ export default function VibeModeScreen() {
     transform: [
       { scale: heartScale.value },
       { translateY: heartTranslateY.value },
+      { translateX: interpolate(heartScale.value, [0, 1], [0, -50]) },
     ],
     opacity: heartOpacity.value,
+  }));
+
+  // Enhanced animated styles
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [
+      { scale: scaleAnim.value },
+      { translateY: slideAnim.value }
+    ]
+  }));
+
+  const albumArtAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: albumArtScale.value * pulseAnim.value },
+      { rotate: `${albumArtRotation.value}deg` },
+      { translateY: Math.sin(albumArtRotation.value * Math.PI / 180) * 8 }
+    ]
+  }));
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: headerOpacity.value,
+    transform: [{ translateY: interpolate(headerOpacity.value, [0, 1], [20, 0]) }]
+  }));
+
+  const controlsAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: controlsOpacity.value,
+    transform: [{ translateY: interpolate(controlsOpacity.value, [0, 1], [30, 0]) }]
   }));
 
   if (isLoading || !feedTracks.length) {
@@ -741,14 +823,14 @@ export default function VibeModeScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000", paddingTop: 44 }}>
+    <View style={styles.container}>
       <StatusBar style="light" />
       
       <TapGestureHandler
         numberOfTaps={2}
         onGestureEvent={doubleTapHandler}
       >
-        <Animated.View style={styles.fullScreen}>
+        <Animated.View style={[styles.fullScreen, containerStyle]}>
           <PanGestureHandler 
             onGestureEvent={swipeHandler}
             onHandlerStateChange={(event) => {
@@ -756,76 +838,104 @@ export default function VibeModeScreen() {
             }}
           >
             <Animated.View style={[styles.fullScreen, animatedStyle]}>
-          {/* Background Image */}
-          <Image
-            source={{ uri: track.album.images[0]?.url }}
-            style={styles.backgroundImage}
-            blurRadius={20}
-          />
+              {/* Futuristic Background */}
+              <LinearGradient
+                colors={['#000000', '#0a0a0a', '#1a1a1a']}
+                style={styles.gradientBackground}
+              >
+                {/* Background Image with Enhanced Blur */}
+                <Image
+                  source={{ uri: track.album.images[0]?.url }}
+                  style={styles.backgroundImage}
+                  blurRadius={25}
+                />
+                
+                {/* Enhanced Overlay */}
+                <View style={styles.overlay} />
+                
+                {/* Futuristic Header */}
+                <Animated.View style={[styles.header, headerAnimatedStyle]}>
+                  <BlurView intensity={20} style={styles.headerBlur}>
+                    <Text style={styles.logo}>Lyrafy</Text>
+                    <View style={styles.headerRight}>
+                      <Text style={styles.exitHint}>Swipe down to exit</Text>
+                    </View>
+                  </BlurView>
+                </Animated.View>
           
-          {/* Dark Overlay */}
-          <View style={styles.overlay} />
-          
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.logo}>Lyrafy</Text>
-            <View style={styles.headerRight}>
-              {isCrossfading && (
-                <View style={styles.crossfadeIndicator}>
-                  <Text style={styles.crossfadeText}>🎵 Blending...</Text>
-                </View>
-              )}
-              <Text style={styles.exitHint}>Swipe down to exit</Text>
-            </View>
+                {/* Main Content */}
+                <View style={styles.content}>
+                  {/* Enhanced Album Art */}
+                  <Animated.View style={[styles.albumArtContainer, albumArtAnimatedStyle]}>
+                    <BlurView intensity={10} style={styles.albumArtBlur}>
+            <Image
+              source={{ uri: track.album.images[0]?.url }}
+              style={styles.albumArt}
+            />
+                      {/* Glow effect */}
+                      <View style={styles.albumArtGlow} />
+                    </BlurView>
+                  </Animated.View>
+                  
+                  {/* Enhanced Track Info */}
+                  <Animated.View style={[styles.trackInfo, controlsAnimatedStyle]}>
+                    <BlurView intensity={15} style={styles.trackInfoBlur}>
+                      <Text style={styles.songTitle} numberOfLines={2}>
+                        {track.name}
+                      </Text>
+                      <Text style={styles.artistName} numberOfLines={1}>
+                        {track.artists.map(a => a.name).join(", ")}
+                      </Text>
+                      <Text style={styles.albumName} numberOfLines={1}>
+                        {track.album.name}
+                      </Text>
+                      <Text style={styles.releaseDate}>
+                        Released: {new Date(track.album.release_date).getFullYear()}
+                      </Text>
+                    </BlurView>
+                  </Animated.View>
           </View>
           
-          {/* Main Content */}
-          <View style={styles.content}>
-            {/* Album Art */}
-            <View style={styles.albumArtContainer}>
-              <Image
-                source={{ uri: track.album.images[0]?.url }}
-                style={styles.albumArt}
-              />
-            </View>
-            
-            {/* Track Info */}
-            <View style={styles.trackInfo}>
-              <Text style={styles.songTitle} numberOfLines={2}>
-                {track.name}
-              </Text>
-              <Text style={styles.artistName} numberOfLines={1}>
-                {track.artists.map(a => a.name).join(", ")}
-              </Text>
-              <Text style={styles.albumName} numberOfLines={1}>
-                {track.album.name}
-              </Text>
-              <Text style={styles.releaseDate}>
-                Released: {new Date(track.album.release_date).getFullYear()}
-              </Text>
-            </View>
-          </View>
-          
-          {/* Animated Like Heart */}
+          {/* Instagram-style Animated Heart */}
           {showLikeAnimation && (
             <Animated.View style={[styles.likeHeart, heartAnimatedStyle]}>
-              <Text style={styles.heartEmoji}>❤️</Text>
+              <LinearGradient
+                colors={['#FF6B6B', '#FF8E8E', '#FFB3B3']}
+                style={styles.heartGradient}
+              >
+                <Text style={styles.heartEmoji}>❤️</Text>
+              </LinearGradient>
             </Animated.View>
           )}
 
-          {/* Swipe Instructions */}
-          <View style={styles.swipeInstructions}>
-            <Text style={styles.swipeText}>Double tap to like • Swipe left to skip • Swipe right to like</Text>
-          </View>
-            </Animated.View>
-          </PanGestureHandler>
+                  {/* Enhanced Swipe Instructions */}
+                  <Animated.View style={[styles.swipeInstructions, controlsAnimatedStyle]}>
+                    <BlurView intensity={10} style={styles.swipeInstructionsBlur}>
+                      <Text style={styles.swipeText}>Double tap to like • Swipe left to skip • Swipe right to like</Text>
+                    </BlurView>
+                  </Animated.View>
+                </LinearGradient>
+          </Animated.View>
+        </PanGestureHandler>
         </Animated.View>
       </TapGestureHandler>
-    </View>
+      </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  gradientBackground: {
+    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   fullScreen: {
     flex: 1,
     width: SCREEN_WIDTH,
@@ -938,9 +1048,21 @@ const styles = StyleSheet.create({
     right: 30,
     zIndex: 20,
   },
+  heartGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
+  },
   heartEmoji: {
-    fontSize: 40,
-    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    fontSize: 32,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
@@ -952,10 +1074,57 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
+  swipeInstructionsBlur: {
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   swipeText: {
-    color: "#333",
-    fontSize: 10,
-    fontWeight: "400",
-    opacity: 0.6,
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    opacity: 0.8,
+    textAlign: "center",
+  },
+  // Enhanced styles
+  headerBlur: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  albumArtBlur: {
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    position: 'relative',
+  },
+  albumArtGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  trackInfoBlur: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
 });
