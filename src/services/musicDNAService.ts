@@ -1,5 +1,6 @@
 import { SpotifyTrack } from "../types/music";
 import { spotifyService } from "./spotifyService";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 export interface MusicDNAProfile {
   vibe: string;
@@ -36,11 +37,14 @@ class MusicDNAService {
       
       // Get recently played tracks
       const limit = timeRange === "day" ? 20 : 50;
-      const tracks = await spotifyService.getRecentlyPlayedTracks(limit);
+      const rawTracks = await spotifyService.getRecentlyPlayedTracks(limit);
       
-      if (tracks.length === 0) {
+      if (rawTracks.length === 0) {
         throw new Error("No recently played tracks found");
       }
+      
+      // Remove duplicate tracks by name
+      const tracks = removeDuplicateTracksByName(rawTracks);
 
       // Analyze tracks
       const analysis = this.analyzeTracks(tracks);

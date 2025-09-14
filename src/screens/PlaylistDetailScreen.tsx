@@ -8,6 +8,7 @@ import { spotifyService } from "../services/spotifyService";
 import { deezerService } from "../services/deezerService";
 import { SpotifyTrack, SpotifyPlaylist } from "../types/music";
 import { Audio } from "expo-av";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 export default function PlaylistDetailScreen() {
   const route = useRoute();
@@ -79,7 +80,10 @@ export default function PlaylistDetailScreen() {
         })
       );
       
-      setTracks(tracksWithPreviews);
+      // Remove duplicate tracks by name
+      const uniqueTracks = removeDuplicateTracksByName(tracksWithPreviews);
+      
+      setTracks(uniqueTracks);
     } catch (error) {
       console.error("Error loading playlist tracks:", error);
       Alert.alert("Error", "Failed to load playlist tracks");

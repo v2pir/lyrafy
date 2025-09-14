@@ -12,7 +12,6 @@ import VibeSelectionScreen from "../screens/VibeSelectionScreen";
 import VibeModeScreen from "../screens/VibeModeScreen";
 import PlaylistsScreen from "../screens/PlaylistsScreen";
 import PlaylistDetailScreen from "../screens/PlaylistDetailScreen";
-import SearchScreen from "../screens/SearchScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import MusicDNAScreen from "../screens/MusicDNAScreen";
 import { VibeMode, SpotifyPlaylist } from "../types/music";
@@ -30,7 +29,6 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
-  Search: undefined;
   Playlists: undefined;
   Profile: undefined;
 };
@@ -47,8 +45,6 @@ function MainTabs() {
 
           if (route.name === "Home") {
             iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "Search") {
-            iconName = focused ? "search" : "search-outline";
           } else if (route.name === "Playlists") {
             iconName = focused ? "musical-notes" : "musical-notes-outline";
           } else if (route.name === "Profile") {
@@ -70,7 +66,6 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Playlists" component={PlaylistsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

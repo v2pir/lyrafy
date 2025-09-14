@@ -7,6 +7,7 @@ import {
   VibeMode,
 } from "../types/music";
 import { SPOTIFY_CONFIG } from "../config/spotify";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 const SPOTIFY_BASE_URL = "https://api.spotify.com/v1";
 const SPOTIFY_ACCOUNTS_URL = "https://accounts.spotify.com/api/token";
@@ -305,10 +306,13 @@ class SpotifyService {
       }
     }
     
-    // Remove duplicates and return up to 300 tracks
-    const uniqueTracks = allTracks.filter((track, index, self) => 
+    // Remove duplicates by ID first, then by name
+    const uniqueByIdTracks = allTracks.filter((track, index, self) => 
       index === self.findIndex(t => t.id === track.id)
     );
+    
+    // Remove duplicates by name
+    const uniqueTracks = removeDuplicateTracksByName(uniqueByIdTracks);
     
     console.log(`Found ${uniqueTracks.length} unique similar tracks`);
     return uniqueTracks.slice(0, 300);
@@ -367,10 +371,13 @@ class SpotifyService {
       }
     }
     
-    // Remove duplicates and return up to 300 tracks
-    const uniqueTracks = allTracks.filter((track, index, self) => 
+    // Remove duplicates by ID first, then by name
+    const uniqueByIdTracks = allTracks.filter((track, index, self) => 
       index === self.findIndex(t => t.id === track.id)
     );
+    
+    // Remove duplicates by name
+    const uniqueTracks = removeDuplicateTracksByName(uniqueByIdTracks);
     
     console.log(`Found ${uniqueTracks.length} unique tracks for vibe mode`);
     return uniqueTracks.slice(0, 300);
@@ -416,6 +423,12 @@ class SpotifyService {
     await this.makeRequest(`/playlists/${playlistId}/tracks`, {
       method: "DELETE",
       body: JSON.stringify({ uris: trackUris }),
+    });
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    await this.makeRequest(`/playlists/${playlistId}/followers`, {
+      method: "DELETE",
     });
   }
 

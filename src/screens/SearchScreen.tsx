@@ -18,6 +18,7 @@ import { useAuthStore } from "../state/authStore";
 import { useMusicStore } from "../state/musicStore";
 import { spotifyService } from "../services/spotifyService";
 import { SpotifyTrack } from "../types/music";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -70,7 +71,9 @@ export default function SearchScreen() {
     setIsLoading(true);
     try {
       const tracks = await spotifyService.searchTracks(query.trim(), 20);
-      setSearchResults(tracks);
+      // Remove duplicate tracks by name
+      const uniqueTracks = removeDuplicateTracksByName(tracks);
+      setSearchResults(uniqueTracks);
     } catch (error) {
       console.error("Search error:", error);
       setSearchResults([]);

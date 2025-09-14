@@ -89,10 +89,21 @@ class DeezerService {
       }
     }
 
-    // Remove duplicates and filter for tracks with previews
-    const uniqueTracks = allTracks.filter((track, index, self) => 
+    // Remove duplicates by ID first, then by name
+    const uniqueByIdTracks = allTracks.filter((track, index, self) => 
       index === self.findIndex(t => t.id === track.id) && track.preview
     );
+    
+    // Remove duplicates by name (case-insensitive)
+    const seenNames = new Set<string>();
+    const uniqueTracks = uniqueByIdTracks.filter(track => {
+      const normalizedName = track.title.toLowerCase().trim();
+      if (!seenNames.has(normalizedName)) {
+        seenNames.add(normalizedName);
+        return true;
+      }
+      return false;
+    });
 
     console.log(`🎵 Found ${uniqueTracks.length} unique tracks with previews on Deezer`);
     return uniqueTracks.slice(0, 50);

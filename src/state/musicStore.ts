@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SpotifyTrack, SpotifyPlaylist, LikedTrack, VibeMode, UserPreferences } from "../types/music";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 interface MusicState {
   // User preferences
@@ -72,7 +73,9 @@ export const useMusicStore = create<MusicState>()(
       },
 
       setFeedTracks: (tracks) => {
-        set({ feedTracks: tracks, currentTrackIndex: 0 });
+        // Remove duplicate tracks by name before setting
+        const uniqueTracks = removeDuplicateTracksByName(tracks);
+        set({ feedTracks: uniqueTracks, currentTrackIndex: 0 });
       },
 
       nextTrack: () => {

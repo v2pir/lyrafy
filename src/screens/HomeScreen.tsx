@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, Alert, ActivityIndicator, Dimensions, StyleSheet } from "react-native";
+import { View, Text, Pressable, Alert, ActivityIndicator, Dimensions, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -23,6 +23,7 @@ import { authService } from "../services/authService";
 import { spotifyService } from "../services/spotifyService";
 import { aiMusicService, MusicTasteProfile } from "../services/aiMusicService";
 import { musicDNAService, MusicDNAProfile } from "../services/musicDNAService";
+import EyeMusicLogo from "../components/EyeMusicLogo";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -210,21 +211,16 @@ export default function HomeScreen() {
           <Animated.View style={[styles.authContainer, containerStyle]}>
             {/* Animated Logo */}
             <Animated.View style={[styles.logoContainer, logoStyle]}>
-              <LinearGradient
-                colors={['#8B5CF6', '#EC4899', '#06B6D4']}
-                style={styles.logoGradient}
-              >
-                <Ionicons name="musical-notes" size={40} color="#FFFFFF" />
-              </LinearGradient>
+              <EyeMusicLogo size={80} />
             </Animated.View>
 
-            <Text style={styles.appTitle}>Lyrafy</Text>
-            <Text style={styles.appSubtitle}>Your AI Music Companion</Text>
+            <Text style={styles.appTitle}>lyrafy</Text>
+            <Text style={styles.appSubtitle}>your ai music companion</Text>
             
             <View style={styles.authCard}>
-              <Text style={styles.authTitle}>Connect Your Music</Text>
+              <Text style={styles.authTitle}>connect your music</Text>
               <Text style={styles.authDescription}>
-                Sign in to Spotify to unlock personalized music discovery powered by AI
+                sign in to spotify to unlock personalized music discovery powered by ai
           </Text>
               
               <Animated.View style={buttonStyle}>
@@ -242,7 +238,7 @@ export default function HomeScreen() {
                     style={styles.buttonGradient}
                   >
                     <Ionicons name="musical-notes" size={24} color="#FFFFFF" />
-                    <Text style={styles.buttonText}>Connect Spotify</Text>
+                    <Text style={styles.buttonText}>connect spotify</Text>
                   </LinearGradient>
           </Pressable>
               </Animated.View>
@@ -262,20 +258,21 @@ export default function HomeScreen() {
         colors={['#000000', '#0a0a0a', '#1a1a1a']}
         style={styles.gradientBackground}
       >
-        <Animated.View style={[styles.mainContainer, containerStyle]}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+        >
+          <Animated.View style={[styles.mainContainer, containerStyle]}>
           {/* Futuristic Header */}
           <View style={styles.header}>
             <Animated.View style={[styles.logoContainer, logoStyle]}>
-              <LinearGradient
-                colors={['#8B5CF6', '#EC4899', '#06B6D4']}
-                style={styles.logoGradient}
-              >
-                <Ionicons name="musical-notes" size={32} color="#FFFFFF" />
-              </LinearGradient>
+              <EyeMusicLogo size={80} />
             </Animated.View>
             
-            <Text style={styles.appTitle}>Lyrafy</Text>
-            <Text style={styles.appSubtitle}>AI-Powered Music Discovery</Text>
+            <Text style={styles.appTitle}>lyrafy</Text>
+            <Text style={styles.appSubtitle}>ai-powered music discovery</Text>
             
             {/* Floating particles effect */}
             <View style={styles.particlesContainer}>
@@ -297,7 +294,7 @@ export default function HomeScreen() {
           <View style={styles.actionsContainer}>
             {/* AI Vibe Card */}
             <Animated.View style={[styles.actionCard, buttonStyle]}>
-              <BlurView intensity={20} style={styles.cardBlur}>
+              <BlurView intensity={10} style={styles.cardBlur}>
                 <LinearGradient
                   colors={['rgba(139, 92, 246, 0.3)', 'rgba(236, 72, 153, 0.3)']}
                   style={styles.cardGradient}
@@ -317,10 +314,10 @@ export default function HomeScreen() {
                       </View>
                       <View style={styles.cardText}>
                         <Text style={styles.cardTitle}>
-                          {isAnalyzing ? "Analyzing..." : "Vibe from Taste"}
+                          {isAnalyzing ? "analyzing..." : "vibe from taste"}
                         </Text>
                         <Text style={styles.cardSubtitle}>
-                          AI learns your music taste
+                          ai learns your music taste
                         </Text>
                       </View>
                       {!isAnalyzing && (
@@ -334,7 +331,7 @@ export default function HomeScreen() {
 
             {/* Music DNA Card */}
             <Animated.View style={[styles.actionCard, buttonStyle]}>
-              <BlurView intensity={20} style={styles.cardBlur}>
+              <BlurView intensity={10} style={styles.cardBlur}>
                 <LinearGradient
                   colors={['rgba(255, 107, 107, 0.3)', 'rgba(255, 142, 142, 0.3)']}
                   style={styles.cardGradient}
@@ -345,9 +342,9 @@ export default function HomeScreen() {
                         <Ionicons name="finger-print" size={28} color="#FFFFFF" />
                       </View>
                       <View style={styles.cardText}>
-                        <Text style={styles.cardTitle}>Music DNA</Text>
+                        <Text style={styles.cardTitle}>music dna</Text>
                         <Text style={styles.cardSubtitle}>
-                          Your musical fingerprint
+                          your musical fingerprint
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
@@ -359,7 +356,7 @@ export default function HomeScreen() {
 
             {/* Choose Vibe Card */}
             <Animated.View style={[styles.actionCard, buttonStyle]}>
-              <BlurView intensity={20} style={styles.cardBlur}>
+              <BlurView intensity={10} style={styles.cardBlur}>
                 <LinearGradient
                   colors={['rgba(29, 185, 84, 0.3)', 'rgba(30, 215, 96, 0.3)']}
                   style={styles.cardGradient}
@@ -370,8 +367,8 @@ export default function HomeScreen() {
                         <Ionicons name="musical-notes" size={28} color="#FFFFFF" />
                       </View>
                       <View style={styles.cardText}>
-                        <Text style={styles.cardTitle}>Choose Vibe</Text>
-                        <Text style={styles.cardSubtitle}>Select your mood</Text>
+                        <Text style={styles.cardTitle}>choose vibe</Text>
+                        <Text style={styles.cardSubtitle}>select your mood</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
                     </View>
@@ -382,7 +379,7 @@ export default function HomeScreen() {
 
             {/* Create Playlist Card */}
             <Animated.View style={[styles.actionCard, buttonStyle]}>
-              <BlurView intensity={20} style={styles.cardBlur}>
+              <BlurView intensity={10} style={styles.cardBlur}>
                 <LinearGradient
                   colors={['rgba(6, 182, 212, 0.3)', 'rgba(14, 165, 233, 0.3)']}
                   style={styles.cardGradient}
@@ -393,8 +390,8 @@ export default function HomeScreen() {
                         <Ionicons name="add-circle" size={28} color="#FFFFFF" />
                       </View>
                       <View style={styles.cardText}>
-                        <Text style={styles.cardTitle}>Create Playlist</Text>
-                        <Text style={styles.cardSubtitle}>Build your collection</Text>
+                        <Text style={styles.cardTitle}>create playlist</Text>
+                        <Text style={styles.cardSubtitle}>build your collection</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
                     </View>
@@ -408,14 +405,15 @@ export default function HomeScreen() {
           {currentVibeMode && (
             <View style={styles.currentVibeCard}>
               <BlurView intensity={10} style={styles.vibeBlur}>
-                <Text style={styles.currentVibeLabel}>Current Vibe</Text>
+                <Text style={styles.currentVibeLabel}>current vibe</Text>
                 <Text style={styles.currentVibeText}>
                   {currentVibeMode.emoji} {currentVibeMode.name}
                 </Text>
               </BlurView>
             </View>
           )}
-        </Animated.View>
+          </Animated.View>
+        </ScrollView>
       </LinearGradient>
     </View>
   );
@@ -429,6 +427,13 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
   authContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -436,9 +441,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   mainContainer: {
-    flex: 1,
     paddingHorizontal: 24,
     paddingTop: 60,
+    minHeight: SCREEN_HEIGHT - 100,
   },
   logoContainer: {
     width: 80,
@@ -533,10 +538,9 @@ const styles = StyleSheet.create({
     top: Math.random() * 200,
   },
   actionsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 16,
+    gap: 20,
     paddingHorizontal: 8,
+    paddingVertical: 20,
   },
   actionCard: {
     borderRadius: 20,

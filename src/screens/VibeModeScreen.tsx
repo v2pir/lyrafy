@@ -1,6 +1,6 @@
 // src/screens/VibeModeScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState } from "react-native";
+import { View, Text, Image, Dimensions, StyleSheet, Pressable, AppState, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
@@ -22,9 +22,10 @@ import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useMusicStore } from "../state/musicStore";
-import { VibeMode, SpotifyTrack } from "../types/music";
+import { VibeMode, SpotifyTrack, SpotifyPlaylist } from "../types/music";
 import { spotifyService } from "../services/spotifyService";
 import { deezerService } from "../services/deezerService";
+import { removeDuplicateTracksByName } from "../utils/deduplication";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -46,6 +47,11 @@ export default function VibeModeScreen() {
   const [isPreloading, setIsPreloading] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  
+  // Temporary playlist state
+  const [tempPlaylist, setTempPlaylist] = useState<SpotifyPlaylist | null>(null);
+  const [playlistTracks, setPlaylistTracks] = useState<SpotifyTrack[]>([]);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
   
   // Enhanced animation values
   const fadeAnim = useSharedValue(0);
@@ -129,14 +135,17 @@ export default function VibeModeScreen() {
           console.log(`🎵 Found ${spotifyTracks.length} Spotify tracks for ${vibeMode?.name}`);
         }
         
-        // Show all Spotify tracks immediately (without previews initially)
-        setLocalTracks(spotifyTracks);
-        setFeedTracks(spotifyTracks);
+        // Remove duplicate tracks by name
+        const uniqueTracks = removeDuplicateTracksByName(spotifyTracks);
+        
+        // Show all unique Spotify tracks immediately (without previews initially)
+        setLocalTracks(uniqueTracks);
+        setFeedTracks(uniqueTracks);
         setIsLoading(false);
         
         // Now find Deezer previews in background
         console.log("🔍 Finding Deezer previews in background...");
-        findDeezerPreviews(spotifyTracks);
+        findDeezerPreviews(uniqueTracks);
         
       } catch (err) {
         console.error("Failed to load tracks:", err);
@@ -600,6 +609,95 @@ export default function VibeModeScreen() {
     }, 650);
   };
 
+  // Create temporary playlist
+  const createTempPlaylist = async (): Promise<SpotifyPlaylist | null> => {
+    try {
+      setIsCreatingPlaylist(true);
+      console.log("🎵 Creating temporary playlist...");
+      
+      const playlist = await spotifyService.createPlaylist(
+        "untitled",
+        "Created by lyrafy - swipe right to add songs"
+      );
+      
+      console.log("✅ Temporary playlist created:", playlist.id);
+      setTempPlaylist(playlist);
+      return playlist;
+    } catch (error) {
+      console.error("❌ Failed to create temporary playlist:", error);
+      Alert.alert("Error", "Failed to create playlist. Please try again.");
+      return null;
+    } finally {
+      setIsCreatingPlaylist(false);
+    }
+  };
+
+  // Add track to temporary playlist
+  const addTrackToTempPlaylist = async (track: SpotifyTrack) => {
+    try {
+      // Create playlist if it doesn't exist
+      let playlist = tempPlaylist;
+      if (!playlist) {
+        playlist = await createTempPlaylist();
+        if (!playlist) return;
+      }
+
+      // Add track to playlist
+      await spotifyService.addTracksToPlaylist(playlist.id, [track.uri]);
+      
+      // Update local state
+      setPlaylistTracks(prev => [...prev, track]);
+      
+      console.log("✅ Added track to playlist:", track.name);
+    } catch (error) {
+      console.error("❌ Failed to add track to playlist:", error);
+      Alert.alert("Error", "Failed to add song to playlist.");
+    }
+  };
+
+  // Delete temporary playlist
+  const deleteTempPlaylist = async () => {
+    if (!tempPlaylist) return;
+    
+    try {
+      console.log("🗑️ Deleting temporary playlist...");
+      await spotifyService.deletePlaylist(tempPlaylist.id);
+      console.log("✅ Temporary playlist deleted");
+    } catch (error) {
+      console.error("❌ Failed to delete playlist:", error);
+      // Don't show error to user since they chose to delete it
+    }
+  };
+
+  // Show playlist confirmation dialog
+  const showPlaylistConfirmation = () => {
+    if (playlistTracks.length === 0) return;
+    
+    Alert.alert(
+      "playlist created! 🎵",
+      `you've added ${playlistTracks.length} songs to your playlist. do you want to keep it?`,
+      [
+        {
+          text: "delete playlist",
+          style: "destructive",
+          onPress: async () => {
+            await deleteTempPlaylist();
+            setTempPlaylist(null);
+            setPlaylistTracks([]);
+          }
+        },
+        {
+          text: "keep playlist",
+          style: "default",
+          onPress: () => {
+            // Keep the playlist - do nothing, it stays on Spotify
+            console.log("✅ Playlist kept on Spotify");
+          }
+        }
+      ]
+    );
+  };
+
   const exitVibeMode = async () => {
     console.log("🚪 Exiting vibe mode");
     
@@ -688,8 +786,16 @@ export default function VibeModeScreen() {
 
   const composedGesture = Gesture.Simultaneous(doubleTapGesture, panGesture);
 
-  const handleSwipe = (direction: "left" | "right") => {
+  const handleSwipe = async (direction: "left" | "right") => {
     console.log("🔄 handleSwipe called with direction:", direction);
+    
+    const currentTrack = feedTracks[currentIndex];
+    
+    // Handle swipe right - add to playlist
+    if (direction === "right" && currentTrack) {
+      console.log("🎵 Swiping right - adding to playlist:", currentTrack.name);
+      await addTrackToTempPlaylist(currentTrack);
+    }
     
     // Reset animation values for next card
     translateX.value = 0;
@@ -701,8 +807,13 @@ export default function VibeModeScreen() {
       console.log("🔄 Current index:", prev, "Next index:", nextIndex, "Total tracks:", feedTracks.length);
       
       if (nextIndex >= feedTracks.length) {
-        // End of deck - could show a message or reset
+        // End of deck - show playlist confirmation if there are tracks in playlist
         console.log("🔄 End of deck reached");
+        if (playlistTracks.length > 0) {
+          setTimeout(() => {
+            showPlaylistConfirmation();
+          }, 500); // Small delay to let animations finish
+        }
         return prev;
       }
       console.log("🔄 Moving to next track, index:", nextIndex);
@@ -873,6 +984,23 @@ export default function VibeModeScreen() {
                       </Text>
                     </BlurView>
                   </Animated.View>
+
+                  {/* Playlist Status */}
+                  {playlistTracks.length > 0 && (
+                    <Animated.View style={[styles.playlistStatusCard, controlsAnimatedStyle]}>
+                      <BlurView intensity={10} style={styles.playlistStatusBlur}>
+                        <View style={styles.playlistStatusContent}>
+                          <Ionicons name="list" size={20} color="#22c55e" />
+                          <Text style={styles.playlistStatusText}>
+                            {playlistTracks.length} song{playlistTracks.length !== 1 ? 's' : ''} in playlist
+                          </Text>
+                          {isCreatingPlaylist && (
+                            <ActivityIndicator size="small" color="#22c55e" />
+                          )}
+                        </View>
+                      </BlurView>
+                    </Animated.View>
+                  )}
           </View>
           
           {/* Instagram-style Animated Heart */}
@@ -890,7 +1018,7 @@ export default function VibeModeScreen() {
                   {/* Enhanced Swipe Instructions */}
                   <Animated.View style={[styles.swipeInstructions, controlsAnimatedStyle]}>
                     <BlurView intensity={10} style={styles.swipeInstructionsBlur}>
-                      <Text style={styles.swipeText}>Double tap to like • Swipe left to skip • Swipe right to like</Text>
+                      <Text style={styles.swipeText}>Double tap to like • Swipe left to skip • Swipe right to add to playlist</Text>
                     </BlurView>
                   </Animated.View>
                 </LinearGradient>
@@ -1104,5 +1232,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  playlistStatusCard: {
+    marginTop: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  playlistStatusBlur: {
+    padding: 12,
+  },
+  playlistStatusContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistStatusText: {
+    fontSize: 14,
+    color: '#22c55e',
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
