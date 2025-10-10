@@ -1,4 +1,4 @@
-# Lyrafy - Music Discovery App
+# Lyrafy - Music Discovery App (completely GPTed the README am not writing allat)
 
 **Tagline:** "Swipe. Discover. Vibe."
 
