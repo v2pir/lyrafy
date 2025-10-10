@@ -23,7 +23,6 @@ A TikTok-style music discovery app that lets users swipe through personalized so
 
 ### 🔐 Authentication
 - **Spotify OAuth**: Secure login with Spotify accounts
-- **Apple Music**: Placeholder implementation for future integration
 - **Secure Storage**: Encrypted token storage with Expo SecureStore
 
 ## Setup Instructions
@@ -113,7 +112,7 @@ src/
 ## App Flow
 
 1. **Welcome Screen**: App introduction with "Get Started" button
-2. **Login Screen**: Spotify/Apple Music OAuth authentication
+2. **Login Screen**: Spotify OAuth authentication
 3. **Genre Preferences**: Select up to 5 favorite genres (optional)
 4. **Main App**: Bottom tab navigation with 4 screens:
    - **Home**: TikTok-style music feed with vibe mode selector
@@ -149,7 +148,6 @@ The app uses Spotify's audio features API to match tracks to vibe modes:
 ### Features to Add
 - Social features (follow friends, share tracks)
 - Offline mode with cached tracks
-- Apple Music full integration
 - Advanced AI recommendations with OpenAI
 - Push notifications for new music
 - Analytics and user insights
@@ -171,4 +169,4 @@ This is a demo implementation. For production use:
 
 ## License
 
-This project is for educational purposes. Spotify and Apple Music are trademarks of their respective owners.
+This project is for educational purposes. Spotify is a trademark of Spotify AB.

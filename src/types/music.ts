@@ -74,30 +74,6 @@ export interface SpotifyUser {
   product: string;
 }
 
-export interface AppleMusicTrack {
-  id: string;
-  type: "songs";
-  attributes: {
-    name: string;
-    artistName: string;
-    albumName: string;
-    durationInMillis: number;
-    previews?: {
-      url: string;
-    }[];
-    artwork: {
-      width: number;
-      height: number;
-      url: string;
-    };
-    playParams?: {
-      id: string;
-      kind: string;
-    };
-    isrc?: string;
-    url: string;
-  };
-}
 
 export interface VibeMode {
   id: string;

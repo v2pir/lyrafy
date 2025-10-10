@@ -113,7 +113,7 @@ class AuthService {
     return useAuthStore.getState().isAuthenticated;
   }
 
-  getConnectedServices(): ("spotify" | "apple")[] {
+  getConnectedServices(): ("spotify")[] {
     return useAuthStore.getState().connectedServices;
   }
 }

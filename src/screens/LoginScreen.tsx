@@ -34,21 +34,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleAppleMusicLogin = async () => {
-    setIsLoading(true);
-    try {
-      const success = await authService.authenticateWithAppleMusic();
-      if (success) {
-        navigation.navigate("GenrePreferences");
-      } else {
-        Alert.alert("Authentication Failed", "Unable to connect to Apple Music. Please try again.");
-      }
-    } catch (error) {
-      Alert.alert("Error", "An error occurred during authentication.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // If already authenticated, skip to preferences
   React.useEffect(() => {
@@ -62,9 +47,9 @@ export default function LoginScreen() {
       <StatusBar style="light" />
       <View className="flex-1 justify-center items-center px-8">
         <View className="items-center mb-16">
-          <Text className="text-4xl font-bold text-white mb-4">Connect Your Music</Text>
+          <Text className="text-4xl font-bold text-white mb-4">Connect to Spotify</Text>
           <Text className="text-base text-gray-300 text-center">
-            Choose your preferred music service to get started
+            Connect your Spotify account to discover new music
           </Text>
         </View>
         
@@ -82,18 +67,6 @@ export default function LoginScreen() {
             </Text>
           </Pressable>
 
-          <Pressable
-            onPress={handleAppleMusicLogin}
-            disabled={isLoading}
-            className={`px-6 py-4 rounded-2xl flex-row items-center justify-center ${
-              isLoading ? "bg-gray-600" : "bg-white"
-            }`}
-          >
-            <Ionicons name="logo-apple" size={24} color="#000000" />
-            <Text className="text-black text-lg font-semibold ml-3">
-              {isLoading ? "Connecting..." : "Continue with Apple Music"}
-            </Text>
-          </Pressable>
         </View>
 
         <Pressable

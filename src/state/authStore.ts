@@ -8,12 +8,10 @@ interface AuthState {
   user: SpotifyUser | null;
   spotifyAccessToken: string | null;
   spotifyRefreshToken: string | null;
-  appleMusicToken: string | null;
-  connectedServices: ("spotify" | "apple")[];
+  connectedServices: ("spotify")[];
   
   // Actions
   setSpotifyAuth: (accessToken: string, refreshToken: string, user: SpotifyUser) => void;
-  setAppleMusicAuth: (token: string) => void;
   logout: () => void;
   updateUser: (user: SpotifyUser) => void;
 }
@@ -25,7 +23,6 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       spotifyAccessToken: null,
       spotifyRefreshToken: null,
-      appleMusicToken: null,
       connectedServices: [],
 
       setSpotifyAuth: (accessToken, refreshToken, user) => {
@@ -38,12 +35,6 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      setAppleMusicAuth: (token) => {
-        set({
-          appleMusicToken: token,
-          connectedServices: [...get().connectedServices.filter(s => s !== "apple"), "apple"],
-        });
-      },
 
       updateUser: (user) => {
         set({ user });
@@ -55,7 +46,6 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           spotifyAccessToken: null,
           spotifyRefreshToken: null,
-          appleMusicToken: null,
           connectedServices: [],
         });
       },
