@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 from dotenv import load_dotenv
 import os 
-        
+
 from models.database import get_db
 from models.user_interactions import UserInteraction
 from models.track_features import TrackFeatures
@@ -15,7 +15,7 @@ from services.spotify_service import SpotifyService
 from services.deezer_service import DeezerService
 from services.auth_service import AuthService
 from services.ai_music_service import AIMusicService
-
+    
 # Load environment variables from parent directory
 load_dotenv(dotenv_path="../.env")
 
