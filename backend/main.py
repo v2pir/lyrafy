@@ -18,9 +18,9 @@ from services.ai_music_service import AIMusicService
 
 # Load environment variables from parent directory
 load_dotenv(dotenv_path="../.env")
-    
-app = FastAPI(title="Lyrafy ML Backend", version="1.0.0")
 
+app = FastAPI(title="Lyrafy ML Backend", version="1.0.0")
+    
 # CORS middleware for React Native
 app.add_middleware(
     CORSMiddleware,
