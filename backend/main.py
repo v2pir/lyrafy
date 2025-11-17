@@ -20,7 +20,7 @@ from services.ai_music_service import AIMusicService
 load_dotenv(dotenv_path="../.env")
 
 app = FastAPI(title="Lyrafy ML Backend", version="1.0.0")
-    
+
 # CORS middleware for React Native
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +29,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+    
 # Initialize services
 ml_service = MLService()
 spotify_service = SpotifyService()
