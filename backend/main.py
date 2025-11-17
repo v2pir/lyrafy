@@ -29,7 +29,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-    
+
 # Initialize services
 ml_service = MLService()
 spotify_service = SpotifyService()
@@ -62,7 +62,7 @@ class RecommendationResponse(BaseModel):
 @app.get("/")
 async def root():
     return {"message": "Lyrafy ML Backend is running!"}
-
+    
 @app.post("/analyze-taste")
 async def analyze_taste(request: TrackAnalysisRequest):
     """Analyze user's music taste from top tracks and create initial profile"""
