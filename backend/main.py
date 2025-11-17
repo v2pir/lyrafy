@@ -15,10 +15,10 @@ from services.spotify_service import SpotifyService
 from services.deezer_service import DeezerService
 from services.auth_service import AuthService
 from services.ai_music_service import AIMusicService
-    
+
 # Load environment variables from parent directory
 load_dotenv(dotenv_path="../.env")
-
+    
 app = FastAPI(title="Lyrafy ML Backend", version="1.0.0")
 
 # CORS middleware for React Native
